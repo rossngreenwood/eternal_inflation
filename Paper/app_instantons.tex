@@ -1,0 +1,68 @@
+\section{Instantons}
+
+% \[ H^2 ds^2 = -\dx t^2 + \sin^2(r) \left( \dx \xi^2 + \cosh^2 \xi \left( \dx \tilde\theta^2 + \sinh^2 \tilde\theta \, \dx\phi^2 \right) \right) \]
+% \[ r \equiv it \qquad \rho \equiv H^{-1} \sin(r) \]
+% \[ ds^2 = H^{-2} \dx r^2 + \rho(r)^2 \left( \dx \xi^2 + \cosh^2 \xi \left( \dx \tilde\theta^2 + \sinh^2 \tilde\theta \, \dx\phi^2 \right) \right) \]
+The equations of motion for the field $\phi$ and the Euclidean radial coordinate $\rho$ are
+\[ \phi'' + \frac{3 \rho'}{\rho} \phi' = \ddx{V}{\phi} \qquad \rho'' = -\frac{8\pi}{3M_{Pl}^2} \left( \phi'^2 + V(\phi) \right) \]
+% The radial component of Einstein's field equations is
+% \[ \ddot\rho = -\frac{8\pi}{3M_{Pl}^2} \left( \dot\phi^2 + V(\phi) \right) \]
+The tunneling amplitude for a single instanton in terms of the Euclidean action $S_E$ is given by
+The probability amplitude for the field at a point to transition from the false vacuum to the true vacuum in a time $\tau = t_f - t_0$ along the path $\bar\phi(t)$ is
+\[ K = \bra{\phi_T,t_f} \left[ \overset\leftarrow\prod_i \ket{\bar\phi_i,t_i}\bra{\bar\phi_i,t_i} \hat U(t_{i-1},t_i) \right] \ket{\phi_F,t_0} = \exp(-S_E) \]
+% \[ K = \exp \left( - S_E / \hbar \right) \]
+\[ S_E(\xi,r,\theta,\phi) = \int \dx\tau \,\dx^3 x \,\sqrt{g} \, \left[ \frac12 \dot\phi^2 + V(\phi) + \frac{1}{2\kappa} \tilde R(\rho) \right] \]
+Here the overdot denotes a total derivative with respect to Euclidean time $\tau = -it$.  The histories that have the most weight will be those that minimize the Euclidean action.  Taking into account those paths that can be course-grained as corresponding to the instanton path, we have
+\[ K = \int D\delta\phi \, \exp(-S_E[\bar\phi+\delta\phi,\bar\rho]) \]
+For now, we fix the background geometry to that of the instanton solution.  The highest degree of constructive interference occurs near the classical and semi-classical solutions -- those that extremize the action and the Euclidean action.  We are therefore concerned with functions that differ from those solutions by only a small perturbation.  Expanding the Euclidean action around the instanton solution, we obtain
+\[ S_E[\phi,\rho] \approx S_E[\bar\phi,\bar\rho] + \frac12 \int \dx\xi_1 \dx\xi_2 \left. \fdx{^2S_E}{\phi(\xi_1) \delta\phi(\xi_2)} \right\rvert_{\bar\phi} \delta\phi(\xi_1) \delta\phi(\xi_2) \]
+Recasting the integral as a quadratic form, we have
+\[ S_E[\phi,\rho] \approx S_E[\bar\phi,\bar\rho] + \frac12 {\mathbf \Phi}^{\mathrm T} \mathbf\Sigma^{-1} \mathbf\Phi \]
+with \[ \Sigma^{-1} \equiv \fdx{^2 S_E[\phi,\bar\rho]}{\phi(\xi_1) \delta\phi(\xi_2)} = 2 \pi \rho^3 \delta(\xi_1-\xi_2) \, \left. \pdx{^2V}{\phi^2} \right\rvert_{\bar\phi(\xi_1)} \]
+The integral over paths then becomes a Gaussian integral, with $\mathbf\Sigma$ the covariance matrix.
+\begin{align*}
+ A &= \int \mathrm D \Phi \, \exp \left( -\frac12 \mathbf\Phi^{\mathrm T} \mathbf\Sigma^{-1} \mathbf\Phi \right) = \left[ \det \left( \frac{ \mathbf\Sigma^{-1} }{2\pi} \right) \right]^{-1/2} \\
+ A &= \left[ \prod_i \left( \left. \frac{2\pi^2 \rho(\xi_i)^3}{2\pi} \pdx{^2V}{\phi^2} \right\rvert_{\phi(\xi_i)} \right)  \right]^{-1/2} \\
+ A &= \exp \left[ -\frac12 \int \dx\xi \, \log \left( \left. \pi \rho(\xi)^3 \pdx{^2V}{\phi^2} \right\rvert_{\bar\phi(\xi)} \right)  \right]
+\end{align*}
+ \[ \int_{-\Lambda}^{\Lambda} \dx x \, \exp \left( -\frac{x^2}{2a^2} \right) = \sqrt{2\pi} a \, \mathrm{erf} \left( \frac{\Lambda}{a\sqrt{2}} \right) \approx 2\Lambda \left[ 1 - \frac16 \frac{\Lambda^2}{a^2} \right] \]
+ For a diagonal covariance matrix $\mathbf \Sigma$ and expanded in the small parameter $\Lambda$, the integral is
+ \[ \int_{-\Lambda}^{\Lambda} Dx \, \exp \left( -\frac12 \mathbf x^{\mathrm T} \mathbf \Sigma^{-1} \mathbf x \right) \approx (2 \Lambda)^{d} \left[ \sum_{i=1}^d \left( 1 - \frac16 \frac{\Lambda^2}{\sigma_i^2} \right) \right] \]
+
+% \[ \dx s^2 = \dx r^2 + \rho(r)^2 \dx\Omega^2 \]
+% The coordinates $r$ and $\Omega$ correspond to the radius of and solid angle on a 3-sphere.
+% \[ S_E = \int \dx r \, L \!\left[\phi(r),\dot\phi(r),\rho(r),\dot\rho(r),\ddot\rho(r)\right] = 2 \pi^2 \int \dx r \left[ \rho^3 \left( \frac12 \dot\phi^2 + V(\phi) \right) + \frac{3}{\kappa} \left( \rho^2 \ddot\rho + \rho \dot\rho^2 - \rho \right) \right] \]
+% Note that the first functional derivatives of $S_E$ vanish when evaluated for the instanton solution.
+% \[ \fdx{S_E}{\phi(r_1)} = \pdx{S}{\phi(r_1)} - \ddx{}{r} \pdx{S}{\dot\phi(r_1)} \]
+% \[ \fdx{^2S_E}{\phi(r_1)\delta\phi(r_2)} = \left. \left( \pdx{^2\mathcal L}{\phi^2} + \frac12 \ddx{}{\xi^2} \pdx{}{\ddot\phi} \left[ \ddx{}{\xi} \pdx{\mathcal L}{\dot\phi} \right] \right) \right\rvert_{r_1} \delta(r_1-r_2) \]
+% \[ \fdx{^2S_E}{\phi(r_1)\delta\phi(r_2)} = 2 \pi^2 \rho^3 \left. \pdx{^2V}{\phi^2} \right\rvert_{r_1} \delta(r_1-r_2) \]
+% \[ \fdx{S_E}{\phi} = \pdx{S}{\rho} - \ddx{}{\xi} \pdx{S}{\dot\rho} + \frac12 \ddx{}{\xi^2} \pdx{^2S}{\ddot\rho} \]
+
+The amplitude is then
+\[ K = A \exp \left(-S_E \left[\bar\phi,\bar\rho \right] \right) = \exp \left[ - \left(S_E + \frac12 \int \dx \xi \, \ln \left(\pi\rho(\xi)^3 \left. \ddx{^2V}{\phi^2} \right\rvert_{\bar\phi(\xi)} \right) \right) \right] \]
+
+
+The probability per unit volume that a bubble has {\it not} formed -- that at time $t_f$, the field configuration contains no true vacuum -- is
+\[ K = \sum_{\phi_f \neq \phi_F} \bra{\phi_f,t_f} \left[ \overset\leftarrow\prod_i \ket{\bar\phi_i,t_i}\bra{\bar\phi_i,t_i} \hat U(t_{i-1},t_i) \right] \ket{\phi_F,t_0} \abs{K}^2 \]
+Among the paths that do not lead to the appearance of regions of true vacuum, the dominant contribution is the classical solution , which extremizes the classical action $S$.  (The next leading contributions come from consecutive of instanton-anti-instanton transitions.)
+\[ K \approx K_{cl} = \exp(-i S_{cl}) \] 
+The corresponding probability is
+\[ P = \abs{K}^2 \equiv \exp(-\Gamma (t_f - t_0) ) \]
+\[ \Gamma = \lim_{t_0 \to \infty} (- \ddx{}{t} \ln P) \]
+\[ K = \sum_{\bar\phi} \bra{\phi_T,t_f} \left[ \overset\leftarrow\prod_i \ket{\bar\phi_i,t_i}\bra{\bar\phi_i,t_i} \hat U(t_{i-1},t_i) \right] \ket{\phi_F,t_0} = \exp(-S_E[\bar\phi(x,t)]) \]
+
+In computing the tunneling amplitude with endpoints matching those of the instanton solution, we have as the pre-factor an approximately Gaussian integral evaluated over the neighborhood of the instanton solution.
+\[ \exp \left(-\Gamma (t_1 - t_0) \right) = \frac{\bra{\Omega} \hat U(t_0,t_1) \ket{0} \! \bra{0} \hat U(t_0,t_1) \ket{\Omega}}{\braket{\Omega}{\Omega}} = \frac{\bra{\Omega} \hat O \ket{\Omega}}{\braket{\Omega}{\Omega}} \]
+\[ \hat O \equiv \hat U(\tau) \ket{0} \! \bra{0} \hat U(\tau) \]
+\[ \exp \left(-\Gamma (t_1 - t_0) \right) = \frac{\bra{\Omega} \hat U(t_0,t_1) \ket{0} \! \bra{0} \hat U(t_0,t_1) \ket{\Omega}}{\braket{\Omega}{\Omega}} = \frac{\bra{\Omega} \hat O \ket{\Omega}}{\braket{\Omega}{\Omega}} \]
+\[ K = \bra{\Omega_1} U(t_0,t_1) \ket{\Omega_0} = A \exp(-S_E[\bar\phi,\bar\rho]) \]
+\[ A \approx \int D\delta\phi \, \exp \left(- \pi^2 \int \dx\xi \, \rho(\xi)^3 \left. \ddx{^2V}{\phi^2} \right\rvert_{\bar\phi} \delta\phi(\xi)^2 \right) \]
+\[ A \approx \int \delta\phi_1 \int \delta\phi_2 \cdots \int \delta\phi_N \, \exp \left(- \sum_{i=1}^N \pi^2 \rho_i^3 \left. \ddx{^2V}{\phi^2} \right\rvert_{\bar\phi_i} \delta\phi_i^2 \right) \]
+
+We consider the case of a single instanton, as well as those of multiple widely separated in time, as resulting in a false vacuum tunneling event.
+\[ \frac{\Lambda}{V} = \left[ \frac{K_1 + K_2 + K_3 + \cdots}{K_0 + K_1 + K_2 + \cdots} \right]^2 \approx \left[ \frac{K_1}{K_0 + K_1} \right]^2 \]
+
+In flat space
+\[ \frac{\Gamma}{V} = \left( \frac{\mathcal M S_3(R_0)}{8\pi} \right)^2 \fract{4 R_0^{-4}}{\pi^2} e^{\zeta'_{R}(-2)} e^{-\bar S_E} \overset?= \lambda \]
+In de Sitter space
+\[ \ddx{\mathcal N}{V_{phys}} \approx \frac{\abs{\lambda}}{H^d} \frac{\dx R}{R^d} \]

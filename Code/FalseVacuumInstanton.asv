@@ -799,7 +799,7 @@ end
 
 methods
     
-    function S = find_action_without_gravity(self,R,Y)
+    function S = find_action_without_gravity(self,R,Y,Phi_int)
         % Calculate the Euclidean action for the instanton:
         % 
         % .. math::
@@ -837,7 +837,7 @@ methods
         
     end
     
-    function B = find_action(self,R,Y)
+    function B = find_action(self,R,Y,Phi_int)
         % Calculate the Euclidean action for the instanton:
         % 
         % .. math::
@@ -853,14 +853,14 @@ methods
         d = self.alpha + 1; % Number of dimensions in the integration
         area = Rho.^self.alpha * 2*pi^(d*.5)/gamma(d*.5);
         
-        actionForm = 0;
-        %   0   Full Euclidean EH action
-        %   1   After integration by parts
-        %   2   Assuming on-shell GR
+        %% Bubble configuration
         
-        %% Action for bubble
+        % And integrate the profile
         
-        switch actionForm
+        exact = 0;
+        %   0   
+        %   
+        switch exact
             case 0
                 lagr = 0.5*dPhi.^2 + self.V(Phi) + 1./self.kappa.*(d2Rho./Rho + (dRho./Rho).^2 - Rho.^(-2));
             case 1
@@ -870,11 +870,11 @@ methods
         end
         S_bubble = trapz(R,area.*lagr);
         
-        if actionForm > 0
+        if exact > 0
             S_bubble = S_bubble + 2*pi^2/self.kappa*(Rho(end)^2*dRho(end));
         end
         
-        %% Action for false vacuum
+        %% False vacuum configuration
         
         % Get Rho(R) in the case of uniform false vacuum
         w = abs(self.kappa*self.V(self.phi_metaMin))^0.5;
@@ -891,7 +891,7 @@ methods
         end
         area_metaMin = Rho_metaMin.^self.alpha * 2*pi^(d*.5)/gamma(d*.5);
         
-        switch actionForm
+        switch exact
             case 0
                 lagr = self.V(self.phi_metaMin) + ...
                     1./self.kappa.*(d2Rho_metaMin./Rho_metaMin + (dRho_metaMin./Rho_metaMin).^2 - Rho_metaMin.^(-2));
@@ -903,11 +903,11 @@ methods
         S_metaMin = trapz(R,area_metaMin.*lagr);
         
         % Add the surface term
-        if actionForm > 0
+        if exact > 0
             S_metaMin = S_metaMin + 2*pi^2/self.kappa*(Rho_metaMin(end)^2*dRho_metaMin(end));
         end
         
-        %% Return tunneling rate exponent
+        % Return tunneling rate exponent
         
         B = S_bubble-S_metaMin;
         
@@ -918,27 +918,22 @@ methods
         % Calculate Euclidean action
         B = self.find_action(R,Y);
         
-        lambda = exp(-B);
-        
         Y = mat2cell(Y,ones(1,size(Y,1)),size(Y,2));
         [Phi,~,~,~,~] = deal(Y{:});
         
-        thinwall = false;
-        if thinwall
-
-            % Bubble radius (thin wall approximation?)
-            R0 = R(1);
-
-            % Calculate surface tension of bubble wall
-            % M = \int_{phi_0}^{phi_r} 2 \sqrt{V(phi) - V(phi_fv)} d\phi
-            integrand = 2*sqrt(abs(self.V(Phi) - self.V(self.phi_metaMin)));
-            M = trapz(Phi,integrand);
-
-            % Calculate pre-factor sans Hubble factor exp(3Ht)
-            % exp(zeta_R'(-2)) = exp(-zeta_R(3)/(2*pi)^2) = 0.97001
-            lambda = lambda*(4*0.97001*R0^2*M^2);
-            
-        end
+        % Bubble radius (thin wall approximation?)
+        R0 = R(1);
+        
+        % Calculate surface tension of bubble wall
+        % M = \int_{phi_0}^{phi_r} 2 \sqrt{V(phi) - V(phi_fv)} d\phi
+        integrand = 2*sqrt(abs(self.V(Phi) - self.V(self.phi_metaMin)));
+        M = trapz(Phi,integrand);
+        
+        % Calculate pre-factor sans Hubble factor exp(3Ht)
+        % exp(zeta_R'(-2)) = exp(-zeta_R(3)/(2*pi)^2) = 0.97001
+        pf = 4*0.97001*R0^2*M^2;
+        
+        lambda = pf*exp(-B);
         
     end
     

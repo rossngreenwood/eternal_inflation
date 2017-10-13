@@ -550,7 +550,7 @@ methods (Access = protected)
         % Choose bubble with the larger tunneling rate
         [datastruct.tunneling_rate,imax] = max(tunneling_rate);
         
-        rate_thres = 1e-5; % Units? Justification?
+        rate_thres = 9/4/pi * H^4; % Units? Justification?
         if tunneling_rate >= rate_thres
             % Find the new value of phi after tunneling
             datastruct.phitunnel = new_phistart(imax);
@@ -803,7 +803,7 @@ methods (Static, Access = protected)
             case SRStatus.rho, fun = V;                            % V = 0
             case SRStatus.eps, fun = @(x) 1 - (Vp(x)./V(x)).^2/2;  % eps = 1
             case SRStatus.eta, fun = @(x) 1 - abs(Vpp(x)./V(x));   % eta = 1
-            case SRStatus.localmin, fun = Vp;                           % Vp = 0
+            case SRStatus.localmin, fun = Vp;                      % Vp = 0
         end
         
         % Find zero of function to obtain true phistart

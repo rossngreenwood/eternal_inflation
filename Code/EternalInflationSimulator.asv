@@ -517,6 +517,27 @@ methods (Access = protected)
             
             if phistart == phiend, return, end
             
+            break
+            
+            %% Look beyond phiend for more slow roll inflation
+            
+% %             % Nearest maximum
+% %             phimax = fminsearch(@(x) -V(x),phistart);
+% %             
+% %             philower = phistop + sgn(Vp(phistart))*0.01*mh;
+% %             Nlower = integral(dlna_dphi,phiend,philower);
+% %             
+% %             lna_steps = 0:floor(Nlower);
+% %             [~,phi_N] = ode45(dphi_dlna,lna_steps,phistart);    % Phi values separated by 1 e-fold of inflation
+% %             if phimax > phistart, phi_N = fliplr(phi_N); end   	% Order [phimax; ... phistart; ... phiend]
+% %             
+% %             phi_sr = phi_N(slowroll(V(phi_N)));
+% %             more_inflation = ~isempty(phi_sr);
+% %             
+% %             look_for_future_inflation();
+% %             sample_phidot();
+% %             do_full_simulation();
+            
         end
         
         % Move phistart to just shy of the local maximum
@@ -660,14 +681,27 @@ methods (Access = protected)
                             case 4, fun = Vp;                           % Vp = 0
                         end
                         
+                        phimax = phistart(ii);
                         if ii > 1
                             phimin = phistart(ii-1);
                         else
                             phimin = phistart_last;
                         end
-                        phiend = binarysearch(fun,phimin,phistart(ii),...
-                            dphi,(status == 1 || (status == 4 && sgn == 1)));
-                        
+                        if status == 1 || (status == 4 && sgn == 1)
+                            phitmp = phimin;
+                            phimin = phimax;
+                            phimax = phitmp;
+                        end
+                        phiend = 0.5*(phimin + phimax);
+                        while abs(phimax-phimin) > abs(dphi)
+                            if fun(phiend) > 0
+                                phimax = phiend;
+                            else
+                                phimin = phiend;
+                            end
+                            phiend = 0.5*(phimin + phimax);
+                        end
+                        phiend = binarysearch(phistart(ii-1)phistart(ii)
                         
                     else
                         % No inflation on other side, don't compute tunnel

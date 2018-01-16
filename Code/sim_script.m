@@ -1,4 +1,4 @@
-n_iter = 1e6;
+n_iter = 5e3;
 
 mv_range = [0.007];
 mh_range = [1];
@@ -36,7 +36,7 @@ for mv = mv_range
 %         i_iter = i_iter+n_iter;
         
         eis = EternalInflationSimulator(...
-            'n_iter',n_iter,'mv',mv,'mh',mh,'fixLambda',true);
+            'n_iter',n_iter,'mv',mv,'mh',mh,'fixLambda',false);
         eis.main()
         
         objects{i_test} = eis;

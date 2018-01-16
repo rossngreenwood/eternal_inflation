@@ -13,7 +13,7 @@ properties ( SetAccess = immutable )
     phi_absMin          % Location of absolute minimum    (final)
     
     alpha   = 3         % Dimension of volume-bounding n-sphere (d-1)
-    kappa   = 8*pi      % $\kappa = 8\pi(G/3) = 8\pi/(3 M_Pl^2)$
+    kappa   = 8*pi      % $\kappa = 8\pi G = 8\pi/M_Pl^2$
     phi_bar             % Edge of barrier (where V(phi_bar) = V(phi_metaMin))
     phi_bar_top         % Top of the barrier
     rscale              % Characteristic length scale
@@ -44,6 +44,18 @@ methods
             error('V must be a function handle.');
         end
         
+        if isa(val.dV,'function_handle')
+            self.dV = val.dV;
+        else
+            error('dV must be a function handle.');
+        end
+        
+        if isa(val.d2V,'function_handle')
+            self.d2V = val.d2V;
+        else
+            error('d2V must be a function handle.');
+        end
+        
         if isscalar(val.phi_absMin) && isreal(val.phi_absMin)
             self.phi_absMin  = fminsearch(self.V,val.phi_absMin);
         else
@@ -59,18 +71,6 @@ methods
         % Check that meta-stable vacuum is meta-stable
         if self.V(self.phi_metaMin) <= self.V(self.phi_absMin)
             error('FalseVacuumInstanton:FalseVacuumIsTrue',['V(phi_metaMin) <= V(phi_absMin); tunneling cannot occur.']);
-        end
-        
-        if isa(val.dV,'function_handle')
-            self.dV = val.dV;
-        else
-            error('dV must be a function handle.');
-        end
-        
-        if isa(val.d2V,'function_handle')
-            self.d2V = val.d2V;
-        else
-            error('d2V must be a function handle.');
         end
         
         if isfield(val,'alpha')
@@ -345,11 +345,16 @@ methods
         
         y = permute(y,circshift([1 2],[0,find(size(y) == 4)]));
         
-        phi  = y(:,1); dphi = y(:,2);
-        rho  = y(:,3); drho = y(:,4);
+        % Unpack variables
+        phi  = y(:,1);
+        dphi = y(:,2);
+        rho  = y(:,3);
+        drho = y(:,4);
         
+        % EOM for the inflaton field
         d2phi = self.dV(phi) - self.alpha*drho.*dphi./rho;
         
+        % EOM for spacetime geometry
         if self.no_gravity
             d2rho = zeros(size(drho));
         else
@@ -362,24 +367,28 @@ methods
     
     function jac = eom_jacobian(self,~,y)
         
+        % Reshape the input if necessary
         y = permute(y,circshift([1 2],[0,find(size(y) == 4)]));
         
-        phi  = y(:,1); dphi = y(:,2);
-        rho  = y(:,3); drho = y(:,4);
+        % Unpack variables
+        phi  = y(:,1);
+        dphi = y(:,2);
+        rho  = y(:,3);
+        drho = y(:,4);
         
         jac = zeros(4);
         
+        % Assemble Jacobian
         if ~self.no_gravity
             jac(1,:) = [0 1 0 0];
             jac(2,:) = [self.d2V(phi), -self.alpha*drho./rho, self.alpha*drho.*dphi./rho^2, -self.alpha*dphi./rho];
             jac(3,:) = [0 0 0 1];
             jac(4,:) = [rho*self.dV(phi), 2*rho*dphi, (dphi.*dphi + self.V(phi)), 0]*(-self.kappa/3);
         else
-            d_dphi_dy  = [0 1 0 0];
-            d_d2phi_dy = [self.d2V(phi), -self.alpha*drho./rho, 0, 0];
-            d_drho_dy  = [0 0 0 1];
-            d_d2rho_dy = [0 0 0 0];
-            jac = [d_dphi_dy; d_d2phi_dy; d_drho_dy; d_d2rho_dy];
+            jac(1,:) = [0 1 0 0];
+            jac(2,:) = [self.d2V(phi), -self.alpha*drho./rho, 0, 0];
+            jac(3,:) = [0 0 0 1];
+            jac(4,:) = [0 0 0 0];
         end
         
     end
@@ -555,16 +564,10 @@ methods
         
         useThinWall = false;
         
-        nloops = 0;
         maxloops = 100;
         dysign = nan;
         R = NaN;
-        while true
-            
-            nloops = nloops+1;
-            if nloops > maxloops
-                break
-            end
+        for nloops = 1:maxloops
             
             % Set initial conditions
             delta_phi0 = exp(-x)*delta_phi;

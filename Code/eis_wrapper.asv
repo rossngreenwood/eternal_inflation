@@ -1,0 +1,61 @@
+function eis_wrapper(...
+        n_iter,             ...   % Number of iterations
+        mv,                 ...   % Initial mass scale of the potential (multiple of Mpl)
+        mh,                 ...   % Mass scale of the inflaton field (multiple of Mpl)
+        kmax,               ...   % Largest wavenumber for GRF
+        gamma,              ...   % Frequency dependence of GRF
+        Nafter,             ...   % Number of e-folds between phiexit and phiend
+        lambdascreenmode,   ...   % Throw out cases where rho_Lambda < 0?
+        fixLambda,          ...   % Condition on rho_Lambda ~= 0?
+        fixQ,               ...   % Condition on Q ~= 10^{-5}?
+        measure,            ...   % Measure on initial conditions
+        n_tunnel_max        )     % Max number of tunneling events to simulate
+    
+    if nargin < 1,  outfile = '';           end
+    if nargin < 2,  n_iter = 1e3;           end
+    if nargin < 3,  mv = 0.007;             end
+    if nargin < 4,  mh = 1;                 end
+    if nargin < 5,  kmax = 30;              end
+    if nargin < 6,  gamma = 0;              end
+    if nargin < 7,  Nafter = 55;            end
+    if nargin < 7,  lambdascreen = true;    end
+    if nargin < 8,  fixLambda = false;      end
+    if nargin < 9,  fixQ = false;           end
+    if nargin < 10, measure = 'B';          end
+    if nargin < 11, n_tunnel_max = 1;       end
+    
+    results = sparse(n_test*n_iter,n_vars);
+    
+    eis = EternalInflationSimulator(...
+        'n_iter',             niter,...
+        'mv',                 mv,...
+        'mh',                 mh,...
+        'kmax',               kmax,...
+        'gamma',              gamma,...
+        'Nafter',             Nafter,...
+        'lambdascreenmode',   lambdascreen,...
+        'fixLambda',          fixLambda,...
+        'fixQ',               fixQ,...
+        'measure',            'B',...
+        'n_tunnel_max',       1,...
+        'outfile',            '');
+    
+    i_test = 0;
+    for mv = mv_range
+        for mh = mh_range
+            
+            i_test = i_test + 1;
+            %         i_iter = i_iter+n_iter;
+            
+            eis = EternalInflationSimulator(...
+                'n_iter',n_iter,'mv',mv,'mh',mh,'fixLambda',false);
+            eis.main()
+            
+            objects{i_test} = eis;
+            
+            %         results(n_iter*(i_test-1)+(1:n_iter),:) = eis.results;
+            
+        end
+    end
+    
+    save(['eternal_sim_outputs_' date()],'objects')

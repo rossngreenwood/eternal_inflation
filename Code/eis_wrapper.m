@@ -27,7 +27,7 @@ function eis_wrapper(...
     if nargin < 11, fixQ = false;           end
     if nargin < 12, Nafter = 55;            end
     if nargin < 13, seed = randi(1e5);               end
-    seed = 94335;
+%     seed = 94335;
     %% Create output file
     
     fid = fopen(outfile,'a');

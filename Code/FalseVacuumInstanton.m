@@ -310,7 +310,7 @@ methods (Access = protected)
         [r1,y1,re,~,ie] = ode23s(dY,[r0,r0+dr],y0.',options);
         
         if ~any(re == r1(end))
-            error('No terminating events were triggered.')
+            error('FalseVacuumInstanton:NoTerminatingEvents','No terminating events were triggered.')
         end
         
         switch ie(end)

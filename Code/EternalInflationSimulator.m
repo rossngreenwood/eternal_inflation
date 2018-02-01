@@ -60,7 +60,7 @@ properties (Constant)
         'mv',...
         'status',...
         'Ntotal',...      
-        'phitunnel',...    
+        'flagFalseVacuumEternal',...    
         'log_tunneling_rate',...
         'Q',...          
         'r',...           
@@ -231,6 +231,8 @@ methods (Access = public)
         
         p = obj.parameters;
         
+        rho_Lambda_thres = 1e-7;
+        
         rng(p.seed);
         
         % Open output file for recording results
@@ -248,13 +250,15 @@ methods (Access = public)
         
         disp(['outfile: ' p.outfile]);
         
+        count = 0;
         % Run n_iter iterations of the inflation simulation
         for i_iter = 1:p.n_iter
             
             data_out = nan(1,17);
             
             if mod(i_iter,1e3) == 0
-                disp(num2str([i_iter toc]));
+                disp(num2str([i_iter toc count/1000.0]));
+                count = 0;
             end
             
             for goto = NaN % on break, goto record data
@@ -297,10 +301,6 @@ methods (Access = public)
                             phistart = phipeak + 1i; % Start at maximum
                         end
                         
-                        stopping_point = 1;
-                        
-                        [data_sr,V,Vp,Vpp,phi,Vstop] = obj.simulate_slowroll(f,phistart);
-                        
                     case 'B'
                         
                         % Generate potential function and
@@ -325,13 +325,85 @@ methods (Access = public)
                         end
                         phistart = phistart_range(ii);
                         
-                        stopping_point = 1;
-                        
-                        [data_sr,V,Vp,Vpp,phi,Vstop] = obj.simulate_slowroll(f,phistart,Vstart(ii),Vpstart(ii));
-                        
                 end
                 
+                %% Check if there is a minimum close to 0
+                
+                p.fixLambda = 1;
+                rho_Lambda  = 0;
+                
+                if p.fixLambda
+                    
+                    [xstop,~] = obj.find_phistop(phistart/p.mh/obj.Mpl,f{1},f{2},[],1,true,true);
+                    
+                    if isnan(xstop)
+                        % Vacuum energy is negative; abort
+                        data_out(2) = 5;
+                        break
+                    end
+                    
+                    fstop = f{1}(xstop);
+                    if abs(fstop) < rho_Lambda_thres/p.mv^4/obj.Mpl^4
+                        % Vacuum energy is already close to a possible
+                        % value for lambda
+                        rho_Lambda = fstop*p.mv^4*obj.Mpl^4;
+                    else
+                        % Check if a neighboring vacuum is close to the
+                        % observed value for lambda
+                        
+                        near_minima = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)};
+                        phipeak     = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)};
+                        phifv       = {xstop,xstop};
+                        
+                        found = false;
+                        
+                        for lr = 1:2
+                            for i_tun = 1:p.n_tunnel_max
+                                [near_minima{lr}(i_tun),phipeak{lr}(i_tun)] = obj.find_next_minimum(...
+                                    phifv{lr}(i_tun),f{1},f{2},f{3},1,2*(lr-1)-1,f{1}(phifv{lr}(i_tun)),f{2}(phifv{lr}(i_tun)));
+                                if ...
+                                        isnan(near_minima{lr}(i_tun)) || ...
+                                        f{1}(near_minima{lr}(i_tun)) < 0 || ...
+                                        diff(f{1}([near_minima{lr}(i_tun),phifv{lr}(i_tun)])) < 0
+                                    break
+                                elseif abs(f{1}(near_minima{lr}(i_tun))) < rho_Lambda_thres/p.mv^4/obj.Mpl^4
+                                    rho_Lambda = f{1}(near_minima{lr}(i_tun))*p.mv^4*obj.Mpl^4;
+                                    found = true;    % Don't keep looking
+                                    break
+                                elseif i_tun < p.n_tunnel_max
+                                    phifv{lr}(i_tun+1) = near_minima{lr}(i_tun);
+                                end
+                            end
+                            if found, break, end
+                        end
+                        
+                        if ~found, break, end
+                        
+                    end
+                    
+                elseif p.lambdascreenmode
+                    
+                    xstop = obj.lambdascreen(phistart/obj.Mpl/p.mh,f{1},1,...
+                        Vstart(ii)/p.mh^4/obj.Mpl^4,Vpstart(ii)/p.mh^4/obj.Mpl^4);
+                    
+                    if isnan(xstop)
+                        % Vacuum energy is negative; abort
+                        data_out(2) = 5;
+                        break
+                    end
+                    
+                end
+                
+                stopping_point = 1;
+                count = count + 1;
                 %% Simulate slow roll inflation
+                
+                switch p.measure
+                    case 'A'
+                        [data_sr,V,Vp,Vpp,phi,Vstop] = obj.simulate_slowroll(f,phistart);
+                    case 'B'
+                        [data_sr,V,Vp,Vpp,phi,Vstop] = obj.simulate_slowroll(f,phistart,rho_Lambda,Vstart(ii),Vpstart(ii));
+                end
                 
                 data_out(2) = data_sr.status;
                 data_out(3) = data_sr.Ntotal;
@@ -341,11 +413,12 @@ methods (Access = public)
                 
                 %% Check for false-vacuum eternal inflation
                 
-                for i_tunnel = 1:p.n_tunnel_max
+                for i_tun = 1:p.n_tunnel_max
                     
                     % Look for an instanton tunneling solution
-                    [log_tunnel_rate,phitunnel,flag_hawking_moss] = obj.check_false_vacuum_eternal(...
-                        f,phi,p.n_tunnel_max+1-i_tunnel,Vstop);
+                    [log_tunnel_rate,phitunnel,flag_hawking_moss,flag_eternal] = ...
+                        obj.check_false_vacuum_eternal(...
+                        f,phi,V,Vp,Vpp,p.n_tunnel_max+1-i_tun,Vstop);
                     
                     if isnan(phitunnel)
                         break % No tunneling; move on
@@ -353,7 +426,7 @@ methods (Access = public)
                     
                     stopping_point = 2;
                     
-                    data_out(4) = phitunnel;
+                    data_out(4) = data_out(4) || flag_eternal;
                     data_out(5) = log_tunnel_rate;
                     
                     % If tunneling occurs, simulate slow roll from the new
@@ -389,13 +462,13 @@ methods (Access = public)
                 
                 stopping_point = 3;
                 
-                data_stoch = obj.check_stochastic_eternal(V,Vp,Vpp,phi,data_sr);
-                data_out(obj.results_map('NSinceStoch')) = data_stoch.NSinceStoch;
-                data_out(obj.results_map('numStochEpochs')) = data_stoch.numStochEpochs;
-                data_out(obj.results_map('NStochastic')) = data_stoch.NStochastic;
-                
-                data_topol = obj.check_topological_eternal(V,Vp,Vpp,phi);
-                data_out(obj.results_map('numTopolEpochs')) = data_topol.numTopolEpochs;
+%                 data_stoch = obj.check_stochastic_eternal(V,Vp,Vpp,phi,data_sr);
+%                 data_out(obj.results_map('NSinceStoch')) = data_stoch.NSinceStoch;
+%                 data_out(obj.results_map('numStochEpochs')) = data_stoch.numStochEpochs;
+%                 data_out(obj.results_map('NStochastic')) = data_stoch.NStochastic;
+%                 
+%                 data_topol = obj.check_topological_eternal(V,Vp,Vpp,phi);
+%                 data_out(obj.results_map('numTopolEpochs')) = data_topol.numTopolEpochs;
                 
                 %% Compute observables
                 
@@ -492,7 +565,7 @@ methods (Access = protected)
         
     end
     
-    function [datastruct,V,Vp,Vpp,phi,Vstop] = simulate_slowroll(obj,f,phistart,Vstart,Vpstart)
+    function [datastruct,V,Vp,Vpp,phi,Vstop] = simulate_slowroll(obj,f,phistart,rho_Lambda,Vstart,Vpstart)
         % Simulate slow roll inflation and collect data
         %
         % Inputs
@@ -501,6 +574,10 @@ methods (Access = protected)
         %
         % Outputs
         %   datastruct  A structure containing observables and diagnostics
+        
+        if nargin < 4, rho_Lambda = 0;  end
+        if nargin < 5, Vstart = [];     end
+        if nargin < 6, Vpstart = [];    end
         
         % If starting at a peak of the potential, 
         % the direction in which the inflaton will evolve
@@ -518,74 +595,32 @@ methods (Access = protected)
         
         kappa = 8*pi/obj.Mpl^2;
         
-        V = build_potential(f,mv,mh,obj.Mpl);
+        V0 = build_potential(f,mv,mh,obj.Mpl);
+        V = @(x) V0(x) - rho_Lambda;
+        
         Vp = []; Vpp = []; Vstop = [];
         
-        if nargin < 4, Vstart = V(phistart); end
-        if nargin < 5
+        if nargin < 5, Vstart = V(phistart); end
+        if nargin < 6
             Vp = build_potential(f,mv,mh,obj.Mpl,1);
             Vpstart = Vp(phistart);
         end
         
-%         sgn = sign(Vpstart);
-%         if sgn > 0
-%             x = phistart + linspace(-4*mh*obj.Mpl,2*mh*obj.Mpl,101);
-%         else
-%             x = phistart + linspace(-2*mh*obj.Mpl,4*mh*obj.Mpl,101);
-%         end
-%         plot(x,V(x),'o'); hold on;
-%         plot(phistart,V(phistart),'x'); hold off; pause(1)
-%         V_interp = griddedInterpolant(x,V(x));
-        
         %% Simulate slow roll
         
-        shift_cases = [0];
-        if obj.parameters.fixLambda, shift_cases = [shift_cases 1]; end
-        if obj.parameters.fixQ,      shift_cases = [shift_cases 2]; end
-        
-        for shifted_potential = shift_cases
+        for shift_potential = 0:uint8(obj.parameters.fixQ)
             
-            %% Modify potential to match observables
-            
-            switch shifted_potential
-                
-                case 1
-                    
-                    % If present-day cosmological constant is above some
-                    % threshold, subtract it from the potential and retry
-                    V_min = V(phistop);
-                    if abs(V_min) > 1e-20
-                        A = datastruct.mv^4; grf = f{1};
-                        V = @(phi) A*grf(phi/mh*sqrt(kappa/8/pi)) - V_min;
-                    end
-                    
-                case 2
-                    
-                    % Rescale mv so that Q matches observation
-                    Q_target = 2e-5;
-                    Q = sqrt(V(phiexit)/(150*(Vp(phiexit)./V(phiexit)).^2/2))/pi;
-                    datastruct.mv = obj.parameters.mv*sqrt(Q_target/Q);
-                    
-                    [V,Vp,Vpp] = build_potential(f,sqrt(Q_target/Q)*mv,mh,obj.Mpl);
-                    
+            if shift_potential
+                % Rescale mv so that Q matches observation
+                Q_target = 2e-5;
+                Q = sqrt(V(phiexit)/(150*(Vp(phiexit)./V(phiexit)).^2/2))/pi;
+                datastruct.mv = obj.parameters.mv*sqrt(Q_target/Q);
+                [V,Vp,Vpp] = build_potential(f,sqrt(Q_target/Q)*mv,mh,obj.Mpl);
+            else
+                [Vp,Vpp] = build_potential(f,mv,mh,obj.Mpl,[1 2]);
             end
             
             %% Identify phiend, phiexit, and phistop
-            
-            % Throw out models that settle into a negative minimum
-            if obj.parameters.lambdascreenmode
-                % Just determine if V(phistop) < 0
-%                 phistop = EternalInflationSimulator.find_phistop_lite(phistart,V_interp,mh*obj.Mpl,Vstart,Vpstart);
-                phistop = obj.lambdascreen(phistart,V,mh*obj.Mpl,Vstart,Vpstart);
-                if isnan(phistop)
-                    datastruct.status = 5;
-                    return
-                end
-            end
-            
-            % Only construct these when they're needed
-            if nargin >= 5, Vp  = build_potential(f,mv,mh,obj.Mpl,1); end
-            Vpp = build_potential(f,mv,mh,obj.Mpl,2);
             
             % Find the end of slow roll inflation
             [phiend,status] = obj.find_phiend(phistart,V,Vp,Vpp,mh*obj.Mpl,obj.Mpl,Vstart,Vpstart);
@@ -634,24 +669,13 @@ methods (Access = protected)
             
         end
         
+        % Set phi(1) = phipeak
         switch obj.parameters.measure
             case 'A'
-                phipeak = phistart;
+                phi(1) = phistart;
             case 'B'
-                phipeak = obj.find_phistop(phistart,V,Vp,Vpp,mh*obj.Mpl);
+                phi(1) = obj.find_phistop(phistart,V,Vp,Vpp,mh*obj.Mpl);
         end
-        phi(1) = phipeak;
-        
-        if phistart == phiend
-            return
-        end
-        
-%         % Move phistart to just shy of the local maximum
-%         if strcmpi(obj.parameters.measure,'A')
-%             delta = 1e-8*(mh*obj.Mpl);
-%             if Vp(phistart) > 0, delta = -delta; end
-%             phistart = fminsearch(@(x) -V(x),phistart) + delta; 
-%         end
         
     end
     
@@ -661,10 +685,10 @@ end
 
 methods (Access = protected)
     
-    function [log_tunnel_rate,phitunnel,flag_hawking_moss,flag_eternal] = check_false_vacuum_eternal(obj,f,phi,n_tunnel_remaining,Vstop)
+    function [log_tunnel_rate,phitunnel,flag_hawking_moss,flag_eternal] = check_false_vacuum_eternal(obj,f,phi,V,Vp,Vpp,n_tunnel_remaining,Vstop)
         % Handle false vacuum tunneling.
         
-        if nargin < 4, n_tunnel_remaining = 1; end
+        if nargin < 7, n_tunnel_remaining = 1; end
         
         mv = obj.parameters.mv;
         mh = obj.parameters.mh;
@@ -676,7 +700,7 @@ methods (Access = protected)
         
         %% Locate nearest minima
         
-        [V,Vp,Vpp] = build_potential(f,mv,mh,obj.Mpl);
+%         [V,Vp,Vpp] = build_potential(f,mv,mh,obj.Mpl);
         phistop = phi(end); % Location of false vacuum
         
         if nargin < 5, Vstop = V(phistop); end
@@ -862,8 +886,7 @@ methods (Access = protected)
             
             if lr_continue, continue, end
             
-%             disp(num2str(phistop-near_minima{lr}(1)));
-            disp(['FVFVFVFVFVFVFV' num2str(rand)]);
+            disp('FVFVFVFVFVFVFV');
             
             %% Do full instanton calculation
             
@@ -889,6 +912,8 @@ methods (Access = protected)
                 switch me.identifier
                     case 'FalseVacuumInstanton:StableFalseVacuum'
                         continue % No tunneling
+                    case 'FalseVacuumInstanton:NoTerminatingEvents'
+                        continue % Integration failed; assume no tunneling
                     otherwise
                         rethrow(me);
                 end
@@ -2066,7 +2091,7 @@ function out = structcat(varargin)
     end
 end
 
-function varargout = build_potential(f,mv,mh,Mpl,d)
+function varargout = build_potential(f,mv,mh,Mpl,d_range)
     
     nd = min(length(f),nargout)-1;
     
@@ -2085,14 +2110,16 @@ function varargout = build_potential(f,mv,mh,Mpl,d)
             mhmd = mh^(-d);
             varargout{d+1} = @(phi) mv4 * mhmd * grf(phi/mh); % reshape(grf(phi(:).'),size(phi));
         end
+        for d = nd+1:max(nd,nargout-1)
+            varargout{d+1} = function_handle.empty();
+        end
     else
-        grf = f{1+d};
-        mhmd = mh^(-d);
-        varargout{1} = @(phi) mv4 * mhmd * grf(phi/mh); % reshape(grf(phi(:).'),size(phi));
-    end
-    
-    for d = nd+1:max(nd,nargout-1)
-        varargout{d+1} = function_handle.empty();
+        for ii = 1:length(d_range)
+            d = d_range(ii);
+            grf = f{1+d};
+            mhmd = mh^(-d);
+            varargout{ii} = @(phi) mv4 * mhmd * grf(phi/mh); % reshape(grf(phi(:).'),size(phi));
+        end
     end
     
 end

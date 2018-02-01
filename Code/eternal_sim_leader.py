@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import time
+from random import randint
 from functools import partial
 from multiprocessing import Manager, Pool
 
@@ -33,7 +34,7 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
     worker_outfile = '.worker_%s.txt' % worker_id
 
     #call = ['matlab', '-nodisplay', '-nosplash', '-nodesktop', '-nojvm', '-minimize', '-r', '\"test(\'', worker_outfile, '\'),exit\"']
-    call = ['matlab', '-nodisplay','-nosplash','-nodesktop','-nojvm','-minimize','-r',
+    call = ['matlab', '-nodisplay','-nosplash','-wait','-nodesktop','-nojvm','-minimize','-r',
         '\"eis_wrapper(\'' +
         worker_outfile + '\',' +
         worker_iter + ',' +
@@ -45,8 +46,10 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
         n_tunnel_max + ',' +
         lambdascreen + ',' +
         fixLambda + ',' +
-        fixQ +
-        ');exit\"']
+        fixQ + ',' +
+        Nafter + ',' +
+        str(randint(1,1000)) +
+        ');\"']
     subprocess.check_call(call)
 
     logging.info('worker %s received signal to go down.' % worker_id)
@@ -79,21 +82,31 @@ def main():
     # Gather parameters from input file
     file_object = open(params.input_file)
     file_contents = file_object.readline().split(",")
-    if len(file_contents) != 11:
-        print("Failed to read file")
-    else:
+    if len(file_contents) >= 1:
         n_iter       = int(  file_contents[0])
+    if len(file_contents) >= 2:
         mv           = float(file_contents[1])
+    if len(file_contents) >= 3:
         mh           = float(file_contents[2])
+    if len(file_contents) >= 4:
         kmax         = int(  file_contents[3])
+    if len(file_contents) >= 5:
         gamma        = float(file_contents[4])
+    if len(file_contents) >= 6:
         measure      = str(  file_contents[5])
+    if len(file_contents) >= 7:
         n_tunnel_max = int(  file_contents[6])
+    if len(file_contents) >= 8:
         lambdascreen = int( file_contents[7])
+    if len(file_contents) >= 9:
         fixLambda    = int( file_contents[8])
+    if len(file_contents) >= 10:
         fixQ         = int( file_contents[9])
+    if len(file_contents) >= 11:
         Nafter       = float(file_contents[10])
-        print(n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,lambdascreen,fixLambda,fixQ,Nafter)
+    if len(file_contents) >= 12:
+        seed         = int(  file_contents[11])
+    print(n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,lambdascreen,fixLambda,fixQ,Nafter)
 
     pool = Pool(processes=params.cores)
     rngenerator_partial = partial(rngenerator,
@@ -112,8 +125,8 @@ def main():
     pool.close()
     pool.join()
 
-    os.system("echo \"Waiting 10 seconds...\"")
-    time.sleep(10)
+    os.system("echo \"Combining output...\"")
+    # time.sleep(10)
 
     # Now that all the processes have completed, we need to process the worker specific vcfs
     worker_files = {i: '.worker_%s.txt' % i for i in range(0, params.cores)}

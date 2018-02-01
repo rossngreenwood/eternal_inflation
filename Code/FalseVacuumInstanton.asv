@@ -151,7 +151,7 @@ methods
 %         end
 %         phi_top = fminsearch(negV, phi_guess, optimset('TolX',phi_tol));
 %         phi_top = fzero(self.dV, [self.phi_metaMin self.phi_bar], optimset('TolX',phi_tol));
-        phi_top = EternalInflationSimulator.find_phipeak(phi_guess,self.V,self.dV,self.d2V,abs(self.phi_bar-self.phi_metaMin));
+        phi_top = obj.find_phipeak(phistart,self.V,self.dV,self.d2V,p.mh*obj.Mpl);
         if ~(self.phi_bar < phi_top && phi_top < self.phi_metaMin || ...
                 self.phi_bar > phi_top && phi_top > self.phi_metaMin)
             error(['Minimization is placing the top of the ' ...

@@ -10,7 +10,8 @@ function eis_wrapper(...
         lambdascreen,       ...   % Throw out cases where rho_Lambda < 0?
         fixLambda,          ...   % Condition on rho_Lambda ~= 0?
         fixQ,               ...   % Condition on Q ~= 10^{-5}?
-        Nafter              ...   % Number of e-folds between phiexit and phiend
+        Nafter,             ...   % Number of e-folds between phiexit and phiend
+        seed                ...   % Seed for the random number generator
     )
     
     if nargin < 1,  outfile = '';           end
@@ -25,6 +26,9 @@ function eis_wrapper(...
     if nargin < 10, fixLambda = false;      end
     if nargin < 11, fixQ = false;           end
     if nargin < 12, Nafter = 55;            end
+    if nargin < 13, seed = randi(1e5);               end
+    seed = 94335;
+    %% Create output file
     
     fid = fopen(outfile,'a');
     if fid == -1
@@ -36,7 +40,10 @@ function eis_wrapper(...
         logical(lambdascreen),logical(fixLambda),logical(fixQ),Nafter);
     fclose(fid);
     
+    %% Initialize and run eternal inflation simulator
+    
     eis = EternalInflationSimulator(...
+        'seed',               seed,...
         'n_iter',             n_iter,...
         'mv',                 mv,...
         'mh',                 mh,...

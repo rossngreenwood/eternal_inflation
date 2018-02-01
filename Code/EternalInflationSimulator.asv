@@ -248,13 +248,18 @@ methods (Access = public)
         
         disp(['outfile: ' p.outfile]);
         
+        t = 0;
+        
         % Run n_iter iterations of the inflation simulation
         for i_iter = 1:p.n_iter
             
             data_out = nan(1,17);
             
             if mod(i_iter,1e3) == 0
-                disp(num2str([i_iter toc]));
+                t0 = t;
+                t = toc;
+                disp(num2str([i_iter t]));
+%                 rng(int32((t-t0)*1e6));
             end
             
             for goto = NaN % on break, goto record data
@@ -862,13 +867,13 @@ methods (Access = protected)
             
             if lr_continue, continue, end
             
-%             disp(num2str(phistop-near_minima{lr}(1)));
+            disp
             disp(['FVFVFVFVFVFVFV' num2str(rand)]);
             
             %% Do full instanton calculation
             
             % Define potential with rescaled mv = 1
-%             [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1,mh,obj.Mpl);
+            [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1,mh,obj.Mpl);
             
             xtol         = 1e-4;
             phitol       = 1e-4;
@@ -1093,7 +1098,7 @@ end
 
 %% Efficient search methods
 
-methods (Static)
+methods (Static, Access = protected)
     
     function [phistop] = lambdascreen(phiend,V,phiscale,Vstart,Vpstart)
         % Find the value of phi at the next local minimum

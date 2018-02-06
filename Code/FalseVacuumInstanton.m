@@ -21,6 +21,8 @@ properties ( SetAccess = immutable )
     no_gravity = false  % Run without the effects of gravity
     flag_plot  = false  % Plot results for debugging
     
+    B_cutoff = Inf;
+    
 end
 
 methods
@@ -107,6 +109,14 @@ methods
             end
         end
         
+        if isfield(val,'B_cutoff')
+            if isscalar(val.B_cutoff) && isreal(val.B_cutoff)
+                self.B_cutoff = val.B_cutoff;
+            else
+                error('B_cutoff must be a real number.');
+            end
+        end
+        
         %% Find barrier location
         
         phi_tol = abs(self.phi_metaMin - self.phi_absMin) * 1e-10;
@@ -116,12 +126,13 @@ methods
         phi2 = self.phi_absMin;
         
         phi0 = 0.5 * (phi1+phi2); % Initial guess
+        sgn = sign(self.dV(phi0));
         ii = 0;
         % Do a very simple binary search to narrow down on the right answer.
         while abs(phi1-phi2) > phi_tol
             ii = ii+1;
             V0 = self.V(phi0);
-            if V0 > V_phimeta
+            if (V0-V_phimeta) > 0
                 phi1 = phi0;
             else
                 phi2 = phi0;
@@ -151,7 +162,7 @@ methods
 %         end
 %         phi_top = fminsearch(negV, phi_guess, optimset('TolX',phi_tol));
 %         phi_top = fzero(self.dV, [self.phi_metaMin self.phi_bar], optimset('TolX',phi_tol));
-        phi_top = EternalInflationSimulator.find_phipeak(phi_guess,self.V,self.dV,self.d2V,abs(self.phi_bar-self.phi_metaMin));
+        phi_top = EternalInflationSimulator.find_phipeak(phi_guess,self.V,self.dV,abs(self.phi_bar-self.phi_metaMin));
         if ~(self.phi_bar < phi_top && phi_top < self.phi_metaMin || ...
                 self.phi_bar > phi_top && phi_top > self.phi_metaMin)
             error(['Minimization is placing the top of the ' ...
@@ -368,7 +379,7 @@ methods
         drho = y(:,4);
         
         % EOM for the inflaton field
-        d2phi = self.dV(phi) - self.alpha*drho.*dphi./rho;
+        d2phi = self.dV(phi.').' - self.alpha*drho.*dphi./rho;
         
         % EOM for spacetime geometry
         if self.no_gravity
@@ -643,8 +654,19 @@ methods
             end
             
             % Close enough; don't wait for convergence
-            if (xmax-xmin) < xtol, break, end
+            if (xmax-xmin) < xtol
+                break
+            end
             
+            if ~isinf(self.B_cutoff)
+                B = self.find_tunneling_suppression(R,Y);
+                disp(['B = ' num2str(B)]);
+                if B > self.B_cutoff
+                    Y(1,1) = nan;
+                    return
+                end
+            end
+             
         end
         
         % Add d^2Rho/dr^2 to the profile
@@ -665,10 +687,10 @@ methods
         if self.no_gravity
             actionForm = 0;
         elseif nargin < 4
-            actionForm = 1;
+            actionForm = 2;
         end
         
-        [Phi,dPhi,Rho,dRho,d2Rho] = deal(Y{:});
+        [Phi,dPhi,Rho,dRho] = deal(Y{1:4});
         
         %% Compute volume terms for bubble interior/exterior (assumes 4D)
         % Generalize to d dimensions?
@@ -725,11 +747,12 @@ methods
                 boundary = 0;
             case 1
                 % Full Einstein-Hilbert Lagrangian
+                d2Rho = Y{5};
                 lagr = 0.5*dPhi.^2 + self.V(Phi) + 3./self.kappa.*(d2Rho./Rho + (dRho./Rho).^2 - Rho.^(-2));
                 boundary = 0;
             case 2
                 % After integration by parts
-                lagr = 0.5*dPhi.^2 + self.V(Phi) - 3./self.kappa.*((dRho./Rho).^2 + Rho.^(-2));
+                lagr = 0.5*dPhi.^2 + self.V(Phi.').' - 3./self.kappa.*((dRho./Rho).^2 + Rho.^(-2));
                 boundary = 6*pi^2/self.kappa*(Rho(end)^2*dRho(end) - Rho(1)^2*dRho(1));
             case 3
                 % After integration by parts and asserting on-shell GR

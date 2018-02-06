@@ -20,7 +20,7 @@ function eis_wrapper(...
     if nargin < 4,  mh = 1;                 end
     if nargin < 5,  kmax = 30;              end
     if nargin < 6,  gamma = 0;              end
-    if nargin < 7,  measure = 'B';          end
+    if nargin < 7,  measure = 'A';          end
     if nargin < 8,  n_tunnel_max = 3;       end
     if nargin < 9,  lambdascreen = true;    end
     if nargin < 10, fixLambda = false;      end

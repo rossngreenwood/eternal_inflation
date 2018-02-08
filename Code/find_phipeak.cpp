@@ -84,19 +84,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     const mwSize *dims;
     int kmax, sgn, r;
 
-    // srand(5);
-    // r = rand();
-    // mexPrintf("%d",r);
-
     // Associate inputs
     phiend_in_m           = mxDuplicateArray(prhs[0]);
     a_in_m                = mxDuplicateArray(prhs[1]);
-    // a_in_m = mxCreateDoubleMatrix(31,1,mxREAL);
     Vscale_in_m           = mxDuplicateArray(prhs[2]);
     rho_Lambda_in_m       = mxDuplicateArray(prhs[3]);
     phiscale_in_m         = mxDuplicateArray(prhs[4]);
-    // lambdascreenmode_in_m = mxDuplicateArray(prhs[5]);
-    // precisionmode_in_m    = mxDuplicateArray(prhs[6]);
 
     // Figure out dimensions
     dims = mxGetDimensions(prhs[0]);
@@ -112,9 +105,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     Vscale = mxGetScalar(Vscale_in_m);
     rho_Lambda = mxGetScalar(rho_Lambda_in_m);
     phiscale = mxGetScalar(phiscale_in_m);
-    // lambdascreenmode = mxGetScalar(lambdascreenmode_in_m);
-    // precisionmode = mxGetScalar(precisionmode_in_m);
-    phiscale = 1;
 
     phipeak = mxGetScalar(phipeak_out_m);
     phipeak_out = mxGetPr(phipeak_out_m);
@@ -127,14 +117,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     } else {
       sgn = -1;
     }
-    phimin = pow(phiscale,2) * *Vpend / *Vend;
+    phimin = pow(phiscale,2) * *Vpend / (*Vend-rho_Lambda) / phiscale;
     if (phimin < 0) { phimin *= -1; }
     dphi = ( (phimin > phiscale) ? phiscale : phimin);
     dphi = 0.001*sgn*((0.01 * phiscale) > dphi ? (0.01*phiscale) : dphi);
 
     step = 1e2;
     phipeak = phiend;
-    while (0 < 1) {
+    while (1) {
 
         phipeak_last = phipeak;
         phipeak += (dphi*step);
@@ -148,8 +138,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     phimin = phipeak;
     phimax = phipeak_last;
 
+    *Vppeak = 0;
+
     phipeak = 0.5*(phimin + phimax);
-    while (abs((phimax-phimin)/dphi) >= 1) {
+    while (abs((phimax-phimin)/dphi) >= 1 || sgn*(*Vppeak) < 0) {
         Vppeak = gaussian_random_field_eval_c(a_in_m,phipeak,1);
         if (sgn*(*Vppeak) > 0) {
             phimax = phipeak;

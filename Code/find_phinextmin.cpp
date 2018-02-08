@@ -73,7 +73,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     double phiend, *a, Vscale, rho_Lambda, phiscale;
     bool lambdascreenmode, also_peak;
     int search_direction;
-
+    
     mxArray *phipeak_out_m;
     double *phipeak_out, phipeak, phipeakmin, phipeakmax;
 
@@ -127,24 +127,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     Vend  = gaussian_random_field_eval_c(a_in_m,phiend/phiscale,0);
     Vpend = gaussian_random_field_eval_c(a_in_m,phiend/phiscale,1);
 
-    // mexPrintf("V_end = %2.4f\n",*Vend);
-    // mexPrintf("Vp_end = %2.4f\n",*Vpend);
-
-    // mexPrintf("rho_Lambda = %2.4f\n",rho_Lambda);
-
     sgn = search_direction;
     phimin = pow(phiscale,2) * *Vpend / (*Vend-rho_Lambda) / phiscale;
     if (phimin < 0) { phimin *= -1; }
     dphi = ( (phimin > phiscale) ? phiscale : phimin);
     dphi = 0.001*sgn*((0.01 * phiscale) > dphi ? (0.01*phiscale) : dphi);
 
-    // mexPrintf("dphi = %2.8f\n",dphi);
-
     flag_crossed_maximum = 0;
     step = pow(10.0,0.0625);
     phinextmin = phiend;
     ind = 1;
-    while (0 < 1) {
+    while (1) {
 
         phinextmin_last = phinextmin;
         phinextmin += dphi*pow(step,ind);
@@ -172,10 +165,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             }
         }
 
-        // if (ind == 10000) {
-        //     *phinextmin_out = mxGetNaN();
-        //     return;
-        // }
         ind = ind + 1;
     }
 

@@ -10,23 +10,21 @@ classdef EternalInflationSimulator < handle
 properties
     
     parameters = struct(...
-        'seed',               1,...
-        'n_iter',             1e2,...   % Number of iterations
+        'seed',               NaN,...   % Seed for random number generator (integer)
+        'n_iter',             1e2,...   % # of iterations
         'mv',                 1e0,...   % Initial mass scale of the potential (multiple of Mpl)
         'mh',                 1,...     % Mass scale of the inflaton field (multiple of Mpl)
         'kmax',               30,...    % Largest wavenumber for GRF
         'gamma',              0,...     % Frequency dependence of GRF
         'Nafter',             55,...    % Number of e-folds between phiexit and phiend
         'lambdascreenmode',   true,...  % Throw out cases where rho_Lambda < 0?
-        'fixLambda',          false,... % Condition on rho_Lambda ~= 0?
-        'fixQ',               false,... % Condition on Q ~= 10^{-5}?
+        'fixQ',               false,... % Condition on Q ~= 2*10^{-5}?
         'measure',            'B',...   % Measure on initial conditions
         'n_tunnel_max',       1,...     % Max number of tunneling events to simulate
-        'outfile',            '',...
-        'n_recycle',          4 ...
+        'n_recycle',          4,...     % # of times to reuse same V(phi) with different phi0 value
+        'rho_Lambda_thres',   1e-7,...  % Threshold below which vacuum energy is considered "small"
+        'outfile',            ''...     % Path to output text file
         );
-    
-    results % Table of observables
     
     plotFlag = 0;
     plotHandle = [];
@@ -36,191 +34,6 @@ end
 properties (Constant)
     
     Mpl = sqrt(8*pi); % Planck mass
-    
-    results_template = struct(...
-        'mv',            1,...
-        'status',        SRStatus.null,...  % Simulation status
-        ...
-        'Ntotal',        nan('single'),...  % Observables
-        ...
-        'phitunnel',     nan('single'),...  % False-vacuum eternal
-        'log_tunneling_rate',nan('single'),...
-        ...
-        'Q',             nan('single'),...
-        'r',             nan('single'),...
-        'n_s',           nan('single'),...
-        'alpha',         nan('single'),...
-        'n_t',           nan('single'),...
-        'dlgrho',        nan('single'),...
-        'lgOk',          nan('single'),...
-        'rho_Lambda',    nan('single'),...
-        ...
-        'NStochastic',   nan('single'),...  % Stochastic eternal
-        'NSinceStoch',   nan('single'),...
-        'numStochEpochs',int8(-1),...
-        ...
-        'numTopolEpochs',int8(-1));       % Topological eternal
-    
-    results_map = containers.Map({...
-        'mv',...
-        'status',...
-        'Ntotal',...      
-        'flagFalseVacuumEternal',...    
-        'log_tunneling_rate',...
-        'Q',...          
-        'r',...           
-        'n_s',...        
-        'alpha',...       
-        'n_t',...        
-        'dlgrho',...      
-        'lgOk',...       
-        'rho_Lambda',...  
-        'NStochastic',...   
-        'numStochEpochs',...
-        'numTopolEpochs'...
-        },{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16});
-    
-end
-
-methods
-    
-    function obj = EternalInflationSimulator(params,varargin)
-        % Constructor
-        % Inputs (varargin)
-        % 1) params     A structure containing some or all of the fields in
-        %               EternalInflationSimulator.parameters
-        % 2) {field1,val1,field2,val2,...}  Field and value pairs
-        
-        if nargin < 1, params = struct(); end
-        
-        obj.set_parameters(params,varargin{:});
-        
-    end
-    
-    function set_parameters(obj,varargin)
-        % Set simulation parameters
-        % Inputs (varargin)
-        % 1) params     A structure containing some or all of the fields in
-        %               EternalInflationSimulator.parameters
-        % 2) {field1,val1,field2,val2,...}  Field and value pairs
-        
-        if nargin == 2
-            val = varargin{:};
-        else
-            val = struct(varargin{:});
-        end
-        
-        for fn = fieldnames(val).'
-            switch fn{:}
-                
-                case 'n_iter'
-                    
-                    if isnumeric(val.n_iter) && isscalar(val.n_iter) && ...
-                            isfinite(val.n_iter) && val.n_iter > 0 && ...
-                            mod(val.n_iter,1) == 0 && isreal(val.n_iter)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.n_iter must be a real, finite, positive integer.');
-                    end
-                    
-                case 'mv'
-                    
-                    if isnumeric(val.mh) && isscalar(val.mh) && ...
-                            isfinite(val.mh) && val.mh > 0 && isreal(val.mv)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.mv must be a real, finite, positive number.');
-                    end
-                    
-                case 'mh'
-                    
-                    if isnumeric(val.mh) && isscalar(val.mh) && ...
-                            isfinite(val.mh) && val.mh > 0 && isreal(val.mh)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.mh must be a real, finite, positive number.');
-                    end
-                    
-                case 'kmax'
-                    if isnumeric(val.kmax) && isscalar(val.kmax) && ...
-                            isfinite(val.kmax) && isreal(val.kmax)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.kmax must be a real, finite number.');
-                    end
-                    
-                case 'gamma'
-                    if isnumeric(val.gamma) && isscalar(val.gamma) && ...
-                            isfinite(val.gamma) && isreal(val.gamma)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.gamma must be a real, finite number.');
-                    end
-                    
-                case 'Nafter'
-                    if isnumeric(val.Nafter) && isscalar(val.Nafter) && ...
-                            isfinite(val.Nafter) && val.Nafter > 0 && ...
-                            isreal(val.Nafter)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.Nafter must be a finite, positive number.');
-                    end
-                    
-                case 'lambdascreenmode'
-                    if islogical(val.lambdascreenmode) && isscalar(val.lambdascreenmode)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.lambdascreenmode must be a logical.');
-                    end
-                    
-                case 'fixLambda'
-                    if islogical(val.fixLambda) && isscalar(val.fixLambda)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.fixLambda must be a logical.');
-                    end
-                    
-                case 'fixQ'
-                    if islogical(val.fixQ) && isscalar(val.fixQ)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.fixQ must be a logical.');
-                    end
-                    
-                case 'measure'
-                    if ismember(upper(val.measure),{'A','B'})
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.measure must be ''A'' or ''B''');
-                    end
-                    
-                case 'n_tunnel_max'
-                    if isnumeric(val.n_tunnel_max) && isscalar(val.n_tunnel_max) && ...
-                            isfinite(val.n_tunnel_max) && val.n_tunnel_max > 0 && ...
-                            mod(val.n_tunnel_max,1) == 0 && isreal(val.n_tunnel_max)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.n_tunnel_max must be a real, finite, positive integer.');
-                    end
-                    
-                case 'seed'
-                    if isnumeric(val.seed) && isscalar(val.seed) && ...
-                            isfinite(val.seed) && val.seed > 0 && ...
-                            mod(val.seed,1) == 0 && isreal(val.seed)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.seed must be a real, finite, positive integer.');
-                    end
-                    
-                case 'outfile'
-                    if ischar(val.outfile)
-                        obj.parameters.outfile = val.outfile;
-                    else
-                        error('Output file name must be a string.');
-                    end
-            end
-        end
-    end
     
 end
 
@@ -234,28 +47,30 @@ methods (Access = public)
         % eternal inflation, as well as CMB observables.
         
         p = obj.parameters;
-        p.rho_Lambda_thres = 1e-7;
         
         % Open output file for recording results
-        fid = fopen(p.outfile,'a');
-        if fid == -1 % Create new file
-            fid = fopen(p.outfile,'w'); fclose(fid);
-            fid = fopen(p.outfile,'a');
-        end
+        fid = fopen(p.outfile,'wt');
+
+        % Write metadata header to text file
+        fprintf(fid,'%E,%.4G,%.4G,%.4G,%d,%.2f,%s,%d,%d,%.4G,%d,%.3f,%d,%d\r\n',...
+            p.n_iter,p.mv,p.mh,obj.Mpl,p.kmax,p.gamma,p.measure,p.n_tunnel_max,...
+            p.lambdascreenmode,p.rho_Lambda_thres,p.fixQ,p.Nafter,p.seed,p.n_recycle);
         
-        rng(p.seed); % Seed the random number generator
+        % Seed the random number generator
+        if ~isnan(p.seed), rng(p.seed); end
         
         tic
         
-        % Scales in natural units
+        % Mass scales in natural units
         Mv = p.mv*obj.Mpl;
         Mh = p.mh*obj.Mpl;
         
-        phi0 = 8*Mh*(-floor(p.n_recycle/2):floor(p.n_recycle/2)-1+mod(p.n_recycle,2));
-        
-        disp(['outfile: ' p.outfile]);
-        
-        count = 0;
+        if p.n_recycle == 1
+            phi0 = 0;
+        else
+            phi0_spacing = 8*Mh; % Separation between starting points on the same potential
+            phi0 = phi0_spacing*(-floor(p.n_recycle/2):floor(p.n_recycle/2)-1+mod(p.n_recycle,2));
+        end
         
         % Run n_iter iterations of the inflation simulation
         for i_iter = 1:p.n_iter
@@ -263,12 +78,12 @@ methods (Access = public)
             data_out = nan(1,17); % Initialize output array
             
             if mod(i_iter,1e3) == 0
-                disp(num2str([i_iter toc count]));
+                disp(num2str([i_iter toc]));
             end
             
             for goto = NaN % on break, goto record data
                 
-                stopping_point = 0;
+                record_flag = 0;
                 
                 %% Draw random potential and set initial conditions
                 
@@ -296,7 +111,7 @@ methods (Access = public)
                         xpeak = find_phipeak(phi0(ii)/Mh,ak,1,0,1);
                         
                         % Start at maximum
-                        if phi0(ii) < phipeak
+                        if phi0(ii) < xpeak*Mh
                             phistart = xpeak*Mh - 1i; % To the left
                         else
                             phistart = xpeak*Mh + 1i; % To the right
@@ -347,16 +162,17 @@ methods (Access = public)
                 %% Check if there is a minimum close to rho_Lambda_thres
                 
                 rho_Lambda  = 0;
+                rho_Lambda_buffer = -1e-15; % Allow the potential minimum to be slightly negative
+                
+                % Find the first local minimum
+                [xstop] = find_phistop(real(phistart)/Mh,ak,...
+                    1, ... % Vscale
+                    -p.rho_Lambda_thres/Mv^4, ...
+                    1, ... % phiscale
+                    p.lambdascreenmode );
                 
                 near_minima = {};
                 if p.rho_Lambda_thres > 0
-                    
-                    rho_Lambda_lower_bound = 0;
-                    [xstop] = find_phistop(real(phistart)/Mh,ak,...
-                        1, ... % Vscale
-                        0, ... % rho_Lambda
-                        1, ... % phiscale
-                        1 );   % lambdascreenmode
                     
                     if isnan(xstop)
                         % Vacuum energy is negative; abort
@@ -382,8 +198,6 @@ methods (Access = public)
                         
                         for lr = 1:2
                             for i_tunnel = 1:p.n_tunnel_max
-%                                 [near_minima{lr}(i_tunnel),phipeak{lr}(i_tunnel)] = obj.find_next_minimum(...
-%                                     phifv{lr}(i_tunnel),f{1},f{2},f{3},1,2*(lr-1)-1,[],[],true);
                                 [near_minima{lr}(i_tunnel),phipeak{lr}(i_tunnel)] = find_phinextmin(...
                                     phifv{lr}(i_tunnel),ak,1,0,1,1,2*(lr-1)-1,1);
                                 if ...
@@ -426,9 +240,6 @@ methods (Access = public)
                     
                 elseif p.lambdascreenmode
                     
-                    xstop = obj.lambdascreen(real(phistart)/Mh,f{1},1,...
-                        Vstart,Vpstart*Mh);
-                    
                     if isnan(xstop)
                         % Vacuum energy is negative; abort
                         data_out(2) = 5;
@@ -437,17 +248,16 @@ methods (Access = public)
                     
                 end
                 
-                count = count + 1;
-                
                 %% Simulate inflation with tunneling events
                 
-                stopping_point = 1;
+                record_flag = 1;
                 
+                Vstop       = [];
                 valid_basin = [];
                 
-                Vstop = [];
-                
                 phi = nan(1,5);
+                data_out(4) = false;
+                
                 goto_break = false;
                 for i_tunnel = 0:p.n_tunnel_max
                     
@@ -470,8 +280,11 @@ methods (Access = public)
                             break
                         end
                         
+                        record_flag = 2;
+                        
                         data_out(4) = data_out(4) || flag_eternal;
-                        data_out(5) = log_tunnel_rate;
+                        % Record smallest tunneling rate
+                        data_out(5) = min(data_out(5),log_tunnel_rate);
                         
                         if flag_hawking_moss
                             if phitunnel < phi(end)
@@ -493,45 +306,37 @@ methods (Access = public)
                     
                     ii = 1 + i_tunnel;
                     [phi(ii,:),status_sr(ii,1),mv_sr(ii,1),Ntotal(ii,1),V,Vp,Vpp] = ...
-                        obj.simulate_slowroll(f,phistart,rho_Lambda);
+                        obj.simulate_slowroll(f,phistart,rho_Lambda,Vstart,Vpstart);
                     
                     % Set phi(5) = phistop
                     if i_tunnel == 0
                         phi(ii,5) = xstop*Mh;
                     else
-                        [xstop] = find_phistop(real(phistart)/Mh,ak,...
+                        [new_xstop] = find_phistop(real(phistart)/Mh,ak,...
                             1, ... % Vscale
                             0, ... % rho_Lambda
                             1, ... % phiscale
                             0 );   % lambdascreenmode
+                        phi(ii,5) = new_xstop*Mh;
                     end
                     
                     if ~isnan(phi(ii,4)) && ~(Ntotal(ii) < p.Nafter)
                         valid_basin(1:ii) = true;
                     else
-                        valid_basin(ii) = false;
+                        valid_basin(ii) = false; %#ok<AGROW>
                     end
                     
-                    stopping_point = 2;
+                    if V(phi(ii,5)) <= 0, break; end
                     
                 end
                 
-                if ~any(valid_basin)
-                    
-                    data_out(1) = mv_sr(end);
-                    data_out(2) = status_sr(end);
-                    data_out(3) = Ntotal(end);
-                    
-                else
-                    
-                    % Tunneling index of last valid basin
-                    i_last = find(cumprod(valid_basin),1,'last');
-                    
-                    data_out(1) = mv_sr(i_last);
-                    data_out(2) = status_sr(i_last);
-                    data_out(3) = Ntotal(i_last);
-                    
-                end
+                % Tunneling index of last valid basin
+                i_last = find(cumprod(valid_basin),1,'last');
+                if isempty(i_last), i_last = length(mv_sr); end
+                
+                data_out(1) = mv_sr(i_last);
+                data_out(2) = status_sr(i_last);
+                data_out(3) = Ntotal(i_last);
                 
                 if goto_break
                     break % No end of inflation
@@ -558,7 +363,7 @@ methods (Access = public)
                 
                 %% Check for stochastic and topological eternal inflation
                 
-                stopping_point = 3;
+                record_flag = 3;
                 
                 for i_tunnel = 0:size(phi,1)-1
                     
@@ -570,28 +375,14 @@ methods (Access = public)
                         phi(1+i_tunnel,1) = phi(1+i_tunnel,2);
                     end
                     
-                    %% Stochastic
+                    [numStochEpochs,NSinceStoch] = obj.check_stochastic_eternal(...
+                        V,Vp,Vpp,phi(1+i_tunnel,:));
+                    flag_topological_eternal = obj.check_topological_eternal(...
+                        V,Vp,Vpp,phistart,phi(1+i_tunnel,1));
                     
-                    [numStochEpochs,NStochastic] = obj.check_stochastic_eternal(...
-                        V,Vp,Vpp,phi(1+i_tunnel,:),Ntotal(1+i_tunnel));
-                    
-                    if isnan(data_out(14)), data_out(14) = 0; end
-                    if isnan(data_out(15)), data_out(15) = 0; end
-                    if ~isnan(NStochastic)
-                        data_out(14) = data_out(14) + NStochastic;
-                    end
-                    if ~isnan(numStochEpochs)
-                        data_out(15) = data_out(15) + numStochEpochs;
-                    end
-                    
-                    %% Topological
-                    
-                    data_topol = obj.check_topological_eternal(V,Vp,Vpp,phi(1+i_tunnel,:));
-                    
-                    if isnan(data_out(16)), data_out(16) = 0; end
-                    if ~isnan(data_topol.numTopolEpochs)
-                        data_out(16) = data_out(16) + data_topol.numTopolEpochs;
-                    end
+                    data_out(6) = max(0,data_out(6)) + max(0,numStochEpochs);
+                    data_out(7) = NSinceStoch;
+                    data_out(8) = max(0,data_out(8)) + max(0,flag_topological_eternal);
                     
                 end
                 
@@ -604,25 +395,136 @@ methods (Access = public)
                 Nbefore = Ntotal - p.Nafter; % e-folds before crossing
                 observables = obj.compute_observables(V,Vp,Vpp,Vppp,phi(end,:),Nbefore,obj.Mpl);
                 for fn = fieldnames(observables).'
-                    data_out(obj.results_map(fn{1})) = observables.(fn{1});
+                    data_out(9) = observables.Q;
+                    data_out(10) = observables.r;
+                    data_out(11) = observables.n_s;
+                    data_out(12) = observables.alpha;
+                    data_out(13) = observables.n_t;
+                    data_out(14) = observables.dlgrho;
+                    data_out(15) = observables.lgOk;
+                    data_out(16) = observables.rho_Lambda;
                 end
                 
             end % for goto
             
             %% Record results
             
-            data_out(isnan(data_out)) = 0;
+            % Record Flags
+            % 1     Potential is valid; simulated slow roll
+            % 2     Checked for false vacuum tunneling
+            % 3     Found a valid basin with sufficient N_e
             
-            switch stopping_point
+            % Idx   Output          Type        Record Flag
+            % 1     mv              (float,4)   1,2,3
+            % 2  	status          (int)       1,2,3
+            % 3     Ntotal          (float,2)   1,2,3
+            % 4  	flag_fv_eternal (bool)      2,3
+            % 5  	log_tunnel_rate (float,4)   2,3
+            % 6  	numStochEpochs  (int)       3
+            % 7  	NSinceStoch     (float,2)   3
+            % 8  	numTopolEpochs  (int)       3
+            % 9  	Q               (float,4)   3
+            % 10 	r               (float,4)   3
+            % 11 	n_s             (float,4)   3
+            % 12 	alpha           (float,4)   3
+            % 13 	n_t             (float,4)   3
+            % 14 	dlgrho          (float,4)   3
+            % 15 	lgOk            (float,4)   3
+            % 16 	rho_Lambda      (float,4)   3
+            
+            switch record_flag
                 case 1
-                    fprintf(fid,'%6.4f,%d,%6.2f\r\n',data_out(1:3));
+                    fprintf(fid,'%d,%.4G,%d,%.2G\r\n',...
+                        [1 data_out(1:3)]);
                 case 2
-                    fprintf(fid,'%6.4f,%d,%6.2f,%6.4f,%6.4f\r\n',data_out(1:5));
+                    fprintf(fid,'%d,%.4G,%d,%.2G,%d,%.4G\r\n',...
+                        [2 data_out(1:5)]);
                 case 3
-                    fprintf(fid,'%6.4f,%d,%6.2f,%6.4f,%6.4f,%6.4f,%6.4f,%6.4f,%6.4f,%6.4f,%6.4f,%6.4f,%d,%d,%d,%d,%6.2f\r\n',data_out);
+                    fprintf(fid,'%d,%.4G,%d,%.2G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
+                        [3 data_out(1:16)]);
             end
             
         end % for i_iter
+        
+        fclose(fid);
+        
+    end
+    
+end
+
+methods (Static)
+    
+    function [datastruct] = read_output_file(outfile,record_flags)
+        
+        fid = fopen(outfile,'r');
+        
+        %% Collect meta-data
+        
+        meta_line = fgets(fid); is = 1;
+        
+        [n_iter,~,~,is1] = sscanf(meta_line(is:end),'%E,',1); is = is+is1-1;
+        [mv_0,~,~,is1]   = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [mh,~,~,is1]     = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [Mpl,~,~,is1]    = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [kmax,~,~,is1]   = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [gamma,~,~,is1]  = sscanf(meta_line(is:end),'%f,',1); is = is+is1-1;
+        
+        [measure,~,~,is1]           = sscanf(meta_line(is:end),'%c,',1); is = is+is1-1;
+        [n_tunnel_max,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [lambdascreen,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [rho_Lambda_thres,~,~,is1]  = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [fixQ,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [Nafter,~,~,is1]            = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [seed,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [n_recycle,~,~,is1]         = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        
+        %% Read output from simulations
+        
+        data = nan(n_iter,16);
+        
+        for i_ln = 1:n_iter
+            
+            % Query record flag for this line
+            [record_flag] = fscanf(fid,'%d,',1);
+            
+            % Reached end of file?
+            if isempty(record_flag), break, end
+            
+            % Only read data corresponding to queried record flags
+            if nargin >= 2 && ~ismember(record_flag,record_flags)
+                fgets(fid); continue % Skip this line
+            end
+            
+            % Read a line of data
+            switch record_flag
+                case 1
+                    data(i_ln,1:3)  = fscanf(fid,'%G,%d,%G\r\n',3);
+                case 2
+                    data(i_ln,1:5)  = fscanf(fid,'%G,%d,%G,%d,%G\r\n',5);
+                case 3
+                    data(i_ln,1:16) = fscanf(fid,'%G,%d,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G\r\n',16);
+            end
+            
+        end
+        
+        data(isnan(data(:,1)),:) = [];
+        
+        datastruct = struct(...
+            'n_iter',           n_iter,...
+            'mv_0',             mv_0,...
+            'mh',               mh,...
+            'Mpl',              Mpl,...
+            'kmax',             kmax,...
+            'gamma',            gamma,...
+            'measure',          measure,...
+            'n_tunnel_max',     n_tunnel_max,...
+            'lambdascreen',     logical(lambdascreen),...
+            'rho_Lambda_thres', rho_Lambda_thres,...
+            'fixQ',             logical(fixQ),...
+            'Nafter',           Nafter,...
+            'seed',             seed,...
+            'n_recycle',        n_recycle,...
+            'data',             data);
         
         fclose(fid);
         
@@ -976,7 +878,7 @@ methods (Access = protected)
                 switch me.identifier
                     case 'FalseVacuumInstanton:StableFalseVacuum'
                         continue % No tunneling
-                    case 'FalseVacuumInstanton:NoTerminatingEvents'
+                    case 'FalseVacuumInstanton:IntegralDiverged'
                         continue % Integration failed; assume no tunneling
                     otherwise
                         rethrow(me);
@@ -1033,12 +935,11 @@ methods (Access = protected)
         
     end
     
-    function [numStochEpochs,NSinceStoch] = check_stochastic_eternal(obj,V,Vp,Vpp,phi,Ntotal)
+    function [numStochEpochs,NSinceStoch] = check_stochastic_eternal(obj,V,Vp,~,phi)
         
         p = obj.parameters;
         
         numStochEpochs = nan;
-%         NStochastic    = nan;
         NSinceStoch = nan;
         
         phipeak  = phi(1);
@@ -1046,11 +947,7 @@ methods (Access = protected)
         phiexit  = phi(3);
         phiend   = phi(4);
         
-        dlna_dphi = @(phi) -V(phi)./Vp(phi);
-%         dphi_dlna = @(N,phi) (-Vp(phi)./V(phi)).';
-        
         kappa = 8*pi/obj.Mpl^2;
-        slowroll = @(x) chop((Vp(x)./V(x)).^2/2/kappa,1) & chop(abs(Vpp(x)./V(x)/kappa),1);
         
         phiscale = p.mh*obj.Mpl;
         
@@ -1135,30 +1032,29 @@ methods (Access = protected)
         
         end
         
-        stochasticEIC = @(x) (kappa*V(x)).^(3/2) > 2*pi*sqrt(3)*(0.607)*abs(Vp(x)); % stochasticEIC > 0 -> Eternal
+        if off2on_sei(end) == 1
+            % SEI ends when inflation ends, if not sooner
+            phibreak_sei(end+1) = phiend;
+            off2on_sei(end+1)   = 0;
+        end
         
-        % Second derivative check for stochastic eternal inflation near the
-        % maximum. Assume potential is locally mirror symmetric about maximum,
-        % or we condition on the field falling only toward phistart.
-        if off2on_sei(1) == 1
-            phidev = phipeak-phibreak_sei(1); Hmax = sqrt(V(phipeak)/3);
-            if abs(erf(abs(phidev/(Hmax/2/pi))/sqrt(2))) > exp(-3)
-                
-                numStochEpochs = 1 + nnz(off2on_sei);
-                
-            else
-                
-                % Exclude the epoch of eternal inflation that includes
-                % phistart?
-                
-                stochasticEIC = @(x) stochasticEIC(x) & ...
-                    ~(min(phipeak,phibreak_sei(1)) <= x && x <= max(phipeak,phibreak_sei(1)));
-                
-                phibreak_sei(1) = []; off2on_sei(1) = [];
-                numStochEpochs = nnz(off2on_sei);
-                
+        dlna_dphi = @(phi) -V(phi)./Vp(phi);
+        
+        % Check that at least one e-fold elapses with SEI valid
+        for i = find(off2on_sei,1)
+            N = integral(@(x) dlna_dphi(x),phibreak_sei(i),phibreak_sei(i+1));
+            if N*sign(phibreak_sei(i)-phibreak_sei(i+1)) < 1
+                % SEI epoch is too short; don't count it
+                phibreak_sei(i:i+1) = [];
+                off2on_sei(i:i+1) = [];
             end
         end
+        
+        if isempty(phibreak_sei), return, end
+        
+        numStochEpochs = nnz(~off2on_sei);
+        
+        stochasticEIC = @(x) (kappa*V(x)).^(3/2) > 2*pi*sqrt(3)*(0.607)*abs(Vp(x)); % stochasticEIC > 0 -> Eternal
         
         % Compute # of e-folds after past SEI breakdown and before phiexit
         if isnan(phiexit)
@@ -1170,7 +1066,7 @@ methods (Access = protected)
             phib = phibreak_sei((phibreak_sei-phiexit)*Vp(phiexit) > 0 & ~off2on_sei);
             [~,imin] = min(abs(phib-phiexit));
             % Integrate e-foldings
-            NSinceStoch = integral(@(x) dlna_dphi(x).*slowroll(x),phib(imin),phiexit);
+            NSinceStoch = integral(@(x) dlna_dphi(x),phib(imin),phiexit);
         end
         
         return
@@ -1237,12 +1133,9 @@ methods (Access = protected)
         
     end
     
-    function [datastruct] = check_topological_eternal(obj,V,Vp,Vpp,phi)
+    function [flag_topological_eternal] = check_topological_eternal(obj,V,Vp,Vpp,phistart,phipeak)
         
-        datastruct = obj.results_template;
-        
-        phimax   = phi(1);
-        phistart = phi(2);
+        flag_topological_eternal = nan;
         
         %% Topological Eternal Inflation
         
@@ -1250,110 +1143,49 @@ methods (Access = protected)
         
         % Determine whether quantum fluctuations could result in at least
         % one Hubble volume descending toward a different minimum of V(phi)
-        if strcmpi(obj.parameters.measure,'a')
-            checkTopological = true;
-        else
-            Vstart = V(phistart);
-            if Vstart > 0
-                H = sqrt(kappa*Vstart/3);
-                dphi = H/2/pi;
-                Dphi = -Vp(phistart)/(3*H^2);
-                try
-                    checkTopological = 1/2*erfc(abs(phistart+Dphi-phimax)/(sqrt(2)*dphi)) > exp(-3);
-                catch me
-                    disp('');
-                end
-            else
-                checkTopological = false;
+        if isreal(phistart)
+            H = sqrt(kappa*V(phistart)/3);
+            dphi = H/2/pi;
+            Dphi = -Vp(phistart)/(3*H^2);
+            if 1/2*erfc(abs(phistart+Dphi-phipeak)/(sqrt(2)*dphi)) < exp(-3)
+                return
             end
         end
         
-        if checkTopological
-            
-            phimax = phi{1};
-            
-            % Find value of phi at the domain wall boundary
-            phiedge_eps = fzero(@(phi) Vp(phi)./V(phi)/2/kappa - 1,phimax);
-            phiedge_eta = fzero(@(phi) abs(Vpp(phi)./V(phi)/kappa) - 1,phimax);
-            [~,icloser] = min(abs(phimax-[phiedge_eps,phiedge_eta]));
-            phiedge = feval(@(x) x(icloser),[phiedge_eps,phiedge_eta]);
-            
-            % Find value of phi that will descend to phistart in time < t_H
-            phistar = NaN; q = 1;
-            while isnan(phistar)
-                try
-                    phistar = fzero(@(phi) phi + Vp(phi)./V(phi) - phiedge, [phimax q*phiedge]);
-                catch ME
-                    if strcmp(ME.identifier,'MATLAB:fzero:ValuesAtEndPtsSameSign')
-                        q = q + 1;
-                        continue
-                    end
-                    rethrow(ME);
+        % Find value of phi at the domain wall boundary
+        phiedge_eps = fzero(@(phi) Vp(phi)./V(phi)/2/kappa - 1,phipeak);
+        phiedge_eta = fzero(@(phi) abs(Vpp(phi)./V(phi)/kappa) - 1,phipeak);
+        [~,icloser] = min(abs(phipeak-[phiedge_eps,phiedge_eta]));
+        phiedge = feval(@(x) x(icloser),[phiedge_eps,phiedge_eta]);
+        
+        % Find value of phi that will descend to phistart in time < t_H
+        phistar = NaN; q = 1;
+        while isnan(phistar)
+            try
+                phistar = fzero(@(phi) phi + Vp(phi)./V(phi) - phiedge, [phipeak q*phiedge]);
+            catch ME
+                if strcmp(ME.identifier,'MATLAB:fzero:ValuesAtEndPtsSameSign')
+                    q = q + 1;
+                    continue
                 end
+                rethrow(ME);
             end
-            
-            % If the expansion of the inner portion of the domain wall
-            % where (phimax < phi < phistar) replaces loss of the outer
-            % wall where (phistar < phi < edge), then inflation is eternal
-            if abs(phistar-phimax) > abs(phiedge-phimax)*exp(-1)
-                datastruct.numTopolEpochs = true;
-            end
-            
+        end
+        
+        % If the expansion of the inner portion of the domain wall
+        % where (phimax < phi < phistar) replaces loss of the outer
+        % wall where (phistar < phi < edge), then inflation is eternal
+        if abs(phistar-phipeak) > abs(phiedge-phipeak)*exp(-1)
+            flag_topological_eternal = true;
         end
         
     end
     
 end
 
-%% Efficient search methods
+%% Efficient search functions
 
 methods (Static)
-    
-    function [phistop] = lambdascreen(phiend,V,phiscale,Vstart,Vpstart)
-        % Find the value of phi at the next local minimum
-        
-        if nargin < 4, Vstart = V(phistart);     end
-        if nargin < 5, Vpstart = Vp(phistart);   end
-        
-        sgn    = sign(Vpstart);
-        phimin = phiscale^2 * abs(Vpstart./Vstart);
-        dphi   = -0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));            %%% Tunable
-        
-        % Take steps until passed local min
-        step = 1e2;
-        ind = 1;
-        batch = 30;
-        phistop = phiend*ones(1,batch);
-        Vstop = inf(1,batch);
-        while true
-            if mod(ind,batch) == 1
-                phistop_last = phistop(end);
-                Vstop_last = Vstop(end);
-                phistop = phistop_last + cumsum(dphi*step*(ind-1:ind+batch-2));
-                Vstop = V(phistop);
-            end
-            ii = mod(ind-1,batch)+1;
-            if Vstop(ii) < 0
-                phistop = nan;
-                return
-            end
-            if ii > 1 && Vstop(ii) > Vstop(ii-1)
-                break
-            elseif ii == 1 && Vstop(1) > Vstop_last
-                break
-            end
-            ind = ind + 1;
-        end
-        
-        phimin = phistop(ii);
-        if ii > 1
-            phimax = phistop(ii-1);
-        else
-            phimax = phistop_last;
-        end
-        phistop = 0.5*(phimin+phimax);
-        
-    end
     
     function [phiend,status] = find_phiend(phistart,V,Vp,Vpp,phiscale,Mpl,Vstart,Vpstart,lambdascreenmode,precisephistop)
         % Find the value of phi at the end of slow roll inflation
@@ -1476,6 +1308,182 @@ methods (Static)
         
     end
     
+    function [phistart,status] = find_phistart_downhill(phiinit,V,Vp,Vpp,phiscale,Mpl)
+        % Find the value of phi at the end of slow roll inflation
+        
+        sgn    = sign(Vp(phiinit));
+        phimin = phiscale^2 * abs(Vp(phiinit)./V(phiinit));
+        dphi   = -0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));
+        
+        status = 2;
+        
+        step = 10^(1/16);
+        ind = 1;
+        batch = 40;
+        phi = phiinit*ones(1,batch);
+        while status ~= 0
+            status_last = status;
+            if mod(ind,batch) == 1
+                phi_last = phi(end);
+                phi = phi_last + cumsum(dphi*step.^(ind-1:ind+batch-2));
+                Vend   = V(phi);
+                Vpend  = Vp(phi);
+                Vppend = Vpp(phi);
+            end
+            ii = mod(ind-1,batch)+1;
+            if (Vpend(ii)/Vend(ii)).^2/(16*pi/Mpl^2) > 1
+                status = 2;
+            elseif abs(Vppend(ii)/Vend(ii))/(8*pi/Mpl^2) > 1
+                status = 3;
+            else
+                status = 0;
+            end
+            if sgn*Vpend(ii) < 0
+                status = 4;
+                break
+            end
+            ind = ind + 1;
+        end
+        
+        if status ~= 0
+            phistart = nan;
+            return
+        end
+        
+        %% Find the precise starting point binary search
+        
+        % Choose function to zero based on status
+        switch status_last
+            case 1, fun = V;                            % V = 0
+            case 2, fun = @(x) (Vp(x)./V(x)).^2/2 - 1;  % eps = 1
+            case 3, fun = @(x) abs(Vpp(x)./V(x)) - 1;   % eta = 1
+            case 4, fun = Vp;                           % Vp = 0
+        end
+        
+        phimax = phi(ii);
+        if ii > 1
+            phimin = phi(ii-1);
+        else
+            phimin = phi_last;
+        end
+        
+        if phimin > phimax
+            phitemp = phimin;
+            phimin = phimax;
+            phimax = phitemp;
+        end
+        
+        phistart = 0.5*(phimin + phimax);
+        while abs(phimax-phimin) > abs(dphi)
+            if fun(phistart) > 0
+                phimax = phistart;
+            else
+                phimin = phistart;
+            end
+            phistart = 0.5*(phimin + phimax);
+        end
+        
+    end
+    
+end
+
+methods (Static)
+    
+    function [status] = compute_status(V,Vp,Vpp,phi,Mpl)
+        if V(phi) < 0
+            status = 1;
+        elseif (Vp(phi)/V(phi)).^2/(16*pi/Mpl^2) > 1
+            status = 2;
+        elseif abs(Vpp(phi)/V(phi))/(8*pi/Mpl^2) > 1
+            status = 3;
+        else
+            status = 0;
+        end
+    end
+    
+    function [observables] = compute_observables(V,Vp,Vpp,Vppp,phi,Nbefore,Mpl)
+        % Inputs
+        %   potential   Cell array of function handles
+        %                   {V, V', V'', V'''}
+        %   phi         Monotonic array of field values
+        %                   [phistart, phiexit, phiend, phistop]
+        %   Nbefore     Number of e-foldings between phistart and phiexit
+        %
+        % Outputs
+        %   observables Structure of observables
+        
+        phiexit  = phi(3);
+        V_exit = V(phiexit);
+        
+        kappa = 8*pi/Mpl^2;
+        
+        % Dimensionless slow roll parameters at horizon exit scale
+        eps = (Vp(phiexit)./V_exit).^2/(2*kappa);
+        eta = Vpp(phiexit)./V_exit/kappa;
+        xi2 = Vp(phiexit).*Vppp(phiexit)./V_exit^2/kappa^2;
+        
+        observables.Q           = sqrt(V_exit/(150*eps))/pi;
+        observables.r           = 16*eps;
+        observables.n_s         = 1-6*eps+2*eta;
+        observables.alpha       = 16*eps*eta - 24*eps^2 - 2*xi2;
+        observables.n_t         = -2*eps;
+        observables.dlgrho      = log10(V_exit/V(phi(4)));
+        observables.lgOk        = log10(V(phi(3))/V_exit) - Nbefore*2/log(10);
+        observables.rho_Lambda  = V(phi(5));
+        
+    end
+    
+end
+
+% Deprecated
+methods (Static)
+    
+    function [phistop] = lambdascreen(phiend,V,phiscale,Vstart,Vpstart)
+        % Find the value of phi at the next local minimum
+        
+        if nargin < 4, Vstart = V(phistart);     end
+        if nargin < 5, Vpstart = Vp(phistart);   end
+        
+        sgn    = sign(Vpstart);
+        phimin = phiscale^2 * abs(Vpstart./Vstart);
+        dphi   = -0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));            %%% Tunable
+        
+        % Take steps until passed local min
+        step = 1e2;
+        ind = 1;
+        batch = 30;
+        phistop = phiend*ones(1,batch);
+        Vstop = inf(1,batch);
+        while true
+            if mod(ind,batch) == 1
+                phistop_last = phistop(end);
+                Vstop_last = Vstop(end);
+                phistop = phistop_last + cumsum(dphi*step*(ind-1:ind+batch-2));
+                Vstop = V(phistop);
+            end
+            ii = mod(ind-1,batch)+1;
+            if Vstop(ii) < 0
+                phistop = nan;
+                return
+            end
+            if ii > 1 && Vstop(ii) > Vstop(ii-1)
+                break
+            elseif ii == 1 && Vstop(1) > Vstop_last
+                break
+            end
+            ind = ind + 1;
+        end
+        
+        phimin = phistop(ii);
+        if ii > 1
+            phimax = phistop(ii-1);
+        else
+            phimax = phistop_last;
+        end
+        phistop = 0.5*(phimin+phimax);
+        
+    end
+    
     function [phistop,Vstop] = find_phistop(phiend,V,Vp,~,phiscale,lambdascreenmode,precisionmode)
         % Find the value of phi at the next local minimum
         
@@ -1593,83 +1601,6 @@ methods (Static)
             phipeak = 0.5*(phimin + phimax);
             Vppeak = Vp(phipeak);
             sgn_Vp = sgn*Vppeak;
-        end
-        
-    end
-    
-    function [phistart,status] = find_phistart_downhill(phiinit,V,Vp,Vpp,phiscale,Mpl)
-        % Find the value of phi at the end of slow roll inflation
-        
-        sgn    = sign(Vp(phiinit));
-        phimin = phiscale^2 * abs(Vp(phiinit)./V(phiinit));
-        dphi   = -0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));
-        
-        status = 2;
-        
-        step = 10^(1/16);
-        ind = 1;
-        batch = 40;
-        phi = phiinit*ones(1,batch);
-        while status ~= 0
-            status_last = status;
-            if mod(ind,batch) == 1
-                phi_last = phi(end);
-                phi = phi_last + cumsum(dphi*step.^(ind-1:ind+batch-2));
-                Vend   = V(phi);
-                Vpend  = Vp(phi);
-                Vppend = Vpp(phi);
-            end
-            ii = mod(ind-1,batch)+1;
-            if (Vpend(ii)/Vend(ii)).^2/(16*pi/Mpl^2) > 1
-                status = 2;
-            elseif abs(Vppend(ii)/Vend(ii))/(8*pi/Mpl^2) > 1
-                status = 3;
-            else
-                status = 0;
-            end
-            if sgn*Vpend(ii) < 0
-                status = 4;
-                break
-            end
-            ind = ind + 1;
-        end
-        
-        if status ~= 0
-            phistart = nan;
-            return
-        end
-        
-        %% Find the precise starting point binary search
-        
-        % Choose function to zero based on status
-        switch status_last
-            case 1, fun = V;                            % V = 0
-            case 2, fun = @(x) (Vp(x)./V(x)).^2/2 - 1;  % eps = 1
-            case 3, fun = @(x) abs(Vpp(x)./V(x)) - 1;   % eta = 1
-            case 4, fun = Vp;                           % Vp = 0
-        end
-        
-        phimax = phi(ii);
-        if ii > 1
-            phimin = phi(ii-1);
-        else
-            phimin = phi_last;
-        end
-        
-        if phimin > phimax
-            phitemp = phimin;
-            phimin = phimax;
-            phimax = phitemp;
-        end
-        
-        phistart = 0.5*(phimin + phimax);
-        while abs(phimax-phimin) > abs(dphi)
-            if fun(phistart) > 0
-                phimax = phistart;
-            else
-                phimin = phistart;
-            end
-            phistart = 0.5*(phimin + phimax);
         end
         
     end
@@ -1885,58 +1816,6 @@ methods (Static)
             end
             phistart = 0.5*(phimin + phimax);
         end
-        
-    end
-    
-end
-
-methods (Static)
-    
-    function [status] = compute_status(V,Vp,Vpp,phi,Mpl)
-        if V(phi) < 0
-            status = 1;
-        elseif (Vp(phi)/V(phi)).^2/(16*pi/Mpl^2) > 1
-            status = 2;
-        elseif abs(Vpp(phi)/V(phi))/(8*pi/Mpl^2) > 1
-            status = 3;
-        else
-            status = 0;
-        end
-    end
-        
-    function [observables] = compute_observables(V,Vp,Vpp,Vppp,phi,Nbefore,Mpl)
-        % Inputs
-        %   potential   Cell array of function handles
-        %                   {V, V', V'', V'''}
-        %   phi         Monotonic array of field values
-        %                   [phistart, phiexit, phiend, phistop]
-        %   Nbefore     Number of e-foldings between phistart and phiexit
-        %
-        % Outputs
-        %   observables Structure of observables
-        
-%         phistart = phi(2);
-        phiexit  = phi(3);
-%         phiend   = phi(4);
-%         phistop  = phi(5);
-        
-        V_exit = V(phiexit);
-        
-        kappa = 8*pi/Mpl^2;
-        
-        % Dimensionless slow roll parameters at horizon exit scale
-        eps = (Vp(phiexit)./V_exit).^2/(2*kappa);
-        eta = Vpp(phiexit)./V_exit/kappa;
-        xi2 = Vp(phiexit).*Vppp(phiexit)./V_exit^2/kappa^2;
-        
-        observables.Q           = sqrt(V_exit/(150*eps))/pi;
-        observables.r           = 16*eps;
-        observables.n_s         = 1-6*eps+2*eta;
-        observables.alpha       = 16*eps*eta - 24*eps^2 - 2*xi2;
-        observables.n_t         = -2*eps;
-        observables.dlgrho      = log10(V_exit/V(phi(4)));
-        observables.lgOk        = log10(V(phi(3))/V_exit) - Nbefore*2/log(10);
-        observables.rho_Lambda  = V(phi(5));
         
     end
     
@@ -2263,26 +2142,168 @@ methods (Static)
 
 end
 
-end
+%% Constructor
 
-function out = chop(a,b,fun)
-    if nargin < 2, b = 0;     end
-    if nargin < 3, fun = @le; end
-    switch func2str(fun)
-        case 'le'
-            out = (a - b) <  1e-14;
-        case 'ge'
-            out = (a - b) > -1e-14;
+methods
+    
+    function obj = EternalInflationSimulator(params,varargin)
+        % Constructor
+        % Inputs (varargin)
+        % 1) params     A structure containing some or all of the fields in
+        %               EternalInflationSimulator.parameters
+        % 2) {field1,val1,field2,val2,...}  Field and value pairs
+        
+        if nargin < 1, params = struct(); end
+        
+        obj.set_parameters(params,varargin{:});
+        
     end
-end
-
-function out = structcat(varargin)
-    out = varargin{1};
-    for istruct = 2:nargin
-        for fn = fieldnames(varargin{istruct}).'
-            out.(fn{1}) = varargin{istruct}.(fn{1});
+    
+    function set_parameters(obj,varargin)
+        % Set simulation parameters
+        % Inputs (varargin)
+        % 1) params     A structure containing some or all of the fields in
+        %               EternalInflationSimulator.parameters
+        % 2) {field1,val1,field2,val2,...}  Field and value pairs
+        
+        if nargin == 2
+            val = varargin{:};
+        else
+            val = struct(varargin{:});
+        end
+        
+        for fn = fieldnames(val).'
+            switch fn{:}
+                
+                case 'n_iter'
+                    
+                    if isnumeric(val.n_iter) && isscalar(val.n_iter) && ...
+                            isfinite(val.n_iter) && val.n_iter > 0 && ...
+                            mod(val.n_iter,1) == 0 && isreal(val.n_iter)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.n_iter must be a real, finite, positive integer.');
+                    end
+                    
+                case 'mv'
+                    
+                    if isnumeric(val.mh) && isscalar(val.mh) && ...
+                            isfinite(val.mh) && val.mh > 0 && isreal(val.mv)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.mv must be a real, finite, positive number.');
+                    end
+                    
+                case 'mh'
+                    
+                    if isnumeric(val.mh) && isscalar(val.mh) && ...
+                            isfinite(val.mh) && val.mh > 0 && isreal(val.mh)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.mh must be a real, finite, positive number.');
+                    end
+                    
+                case 'kmax'
+                    if isnumeric(val.kmax) && isscalar(val.kmax) && ...
+                            isfinite(val.kmax) && isreal(val.kmax)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.kmax must be a real, finite number.');
+                    end
+                    
+                case 'gamma'
+                    if isnumeric(val.gamma) && isscalar(val.gamma) && ...
+                            isfinite(val.gamma) && isreal(val.gamma)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.gamma must be a real, finite number.');
+                    end
+                    
+                case 'Nafter'
+                    if isnumeric(val.Nafter) && isscalar(val.Nafter) && ...
+                            isfinite(val.Nafter) && val.Nafter > 0 && ...
+                            isreal(val.Nafter)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.Nafter must be a finite, positive number.');
+                    end
+                    
+                case 'lambdascreenmode'
+                    if islogical(val.lambdascreenmode) && isscalar(val.lambdascreenmode)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.lambdascreenmode must be a logical.');
+                    end
+                    
+%                 case 'fixLambda'
+%                     if islogical(val.fixLambda) && isscalar(val.fixLambda)
+%                         obj.parameters.(fn{:}) = val.(fn{:});
+%                     else
+%                         error('parameters.fixLambda must be a logical.');
+%                     end
+                    
+                case 'rho_Lambda_thres'
+                    if isscalar(val.rho_Lambda_thres) && isreal(val.rho_Lambda_thres)
+                        obj.parameters.(fn{:}) = abs(val.(fn{:}));
+                    else
+                        error('parameters.rho_Lambda_thres must be a real number.');
+                    end
+                    
+                case 'fixQ'
+                    if islogical(val.fixQ) && isscalar(val.fixQ)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.fixQ must be a logical.');
+                    end
+                    
+                case 'measure'
+                    if ismember(upper(val.measure),{'A','B'})
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.measure must be ''A'' or ''B''');
+                    end
+                    
+                case 'n_tunnel_max'
+                    if isnumeric(val.n_tunnel_max) && isscalar(val.n_tunnel_max) && ...
+                            isfinite(val.n_tunnel_max) && val.n_tunnel_max > 0 && ...
+                            mod(val.n_tunnel_max,1) == 0 && isreal(val.n_tunnel_max)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.n_tunnel_max must be a real, finite, positive integer.');
+                    end
+                    
+                case 'n_recycle'
+                    if isnumeric(val.n_recycle) && isscalar(val.n_recycle) && ...
+                            isfinite(val.n_recycle) && val.n_recycle > 0 && ...
+                            mod(val.n_recycle,1) == 0 && isreal(val.n_recycle)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.n_recycle must be a real, finite, positive integer.');
+                    end
+                    
+                case 'seed'
+                    if isnumeric(val.seed) && isscalar(val.seed) && ...
+                            isfinite(val.seed) && val.seed > 0 && ...
+                            mod(val.seed,1) == 0 && isreal(val.seed)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    elseif isscalar(val.seed) && isnan(val.seed)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.seed must be a real, finite, positive integer.');
+                    end
+                    
+                case 'outfile'
+                    if ischar(val.outfile)
+                        obj.parameters.outfile = val.outfile;
+                    else
+                        error('Output file name must be a string.');
+                    end
+            end
         end
     end
+    
+end
+
 end
 
 function varargout = build_potential(f,mv,mh,Mpl,d_range)

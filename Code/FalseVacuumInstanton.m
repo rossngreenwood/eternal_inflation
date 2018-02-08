@@ -321,7 +321,8 @@ methods (Access = protected)
         [r1,y1,re,~,ie] = ode23s(dY,[r0,r0+dr],y0.',options);
         
         if ~any(re == r1(end))
-            error('FalseVacuumInstanton:NoTerminatingEvents','No terminating events were triggered.')
+            error('FalseVacuumInstanton:NoTerminatingEvents',...
+                'No terminating events were triggered.')
         end
         
         switch ie(end)
@@ -331,6 +332,9 @@ methods (Access = protected)
                 convergence_type = 'undershoot';
             case {4,5} % Passed meta-stable minimum without stopping
                 convergence_type = 'overshoot';
+            case {7}
+                error('FalseVacuumInstanton:IntegralDiverged',...
+                    'ODE solver failed to integrate instanton solution.');
         end
         
         if self.flag_plot
@@ -507,7 +511,8 @@ methods
                 dphi*ysign - eps(2),        (phi-phi0)*ysign > eps(1)   +1;...
                 (phi-phi0)*ysign + eps(1),  true,                       -1;...
                 drho - (-1+eps(4)),         abs(dphi) < eps(2)          +1;...
-                rho,                        true,                       -1
+                rho,                        true,                       -1;...
+                abs(dphi/phi) - 1e5,        true,                       +1
             ];
             
         end
@@ -570,6 +575,7 @@ methods
         else
             % Guess phi(r=0) = phi_bar, where V(phi) = V(phi_metaMin)
             x = -log(abs((self.phi_bar-self.phi_absMin)/delta_phi));
+            x = 10;
         end
         xincrease = 2.0;
         
@@ -658,14 +664,14 @@ methods
                 break
             end
             
-            if ~isinf(self.B_cutoff)
-                B = self.find_tunneling_suppression(R,Y);
-                disp(['B = ' num2str(B)]);
-                if B > self.B_cutoff
-                    Y(1,1) = nan;
-                    return
-                end
-            end
+%             if ~isinf(self.B_cutoff)
+%                 B = self.find_tunneling_suppression(R,Y);
+%                 disp(['B = ' num2str(B)]);
+%                 if B > self.B_cutoff
+%                     Y(1,1) = nan;
+%                     return
+%                 end
+%             end
              
         end
         

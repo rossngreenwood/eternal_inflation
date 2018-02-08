@@ -12,7 +12,7 @@ from functools import partial
 from multiprocessing import Manager, Pool
 
 
-def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_max, lambdascreen, fixLambda, fixQ, Nafter):
+def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_max, lambdascreen, rho_Lambda_thres, fixQ, Nafter, seed, n_recycle):
     """
     Generate a random ross n g
 
@@ -25,7 +25,7 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
     :param str measure:
     :param int n_tunnel_max:
     :param bool lambdascreen:
-    :param bool fixLambda:
+    :param float rho_Lambda_thres:
     :param bool fixQ:
     :param float Nafter:
     """
@@ -45,10 +45,11 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
         '\'' + measure + '\',' +
         n_tunnel_max + ',' +
         lambdascreen + ',' +
-        fixLambda + ',' +
+        rho_Lambda_thres + ',' +
         fixQ + ',' +
         Nafter + ',' +
-        str(randint(1,1000)) +
+        str(randint(1000)) + ',' +
+        n_recycle +
         ');\"']
     subprocess.check_call(call)
 
@@ -68,16 +69,18 @@ def main():
 
     # Default parameter values
     n_iter       = 1000
-    mv           = 1
-    mh           = 1
+    mv           = 1.0
+    mh           = 1.0
     kmax         = 30
     gamma        = 0.0
     measure      = 'B'
     n_tunnel_max = 3
     lambdascreen = True
-    fixLambda    = False
+    rho_Lambda_thres = 0.0000001
     fixQ         = False
     Nafter       = 60
+    seed         = randint(1,1000);
+    n_recycle    = 4;
 
     # Gather parameters from input file
     file_object = open(params.input_file)
@@ -99,14 +102,16 @@ def main():
     if len(file_contents) >= 8:
         lambdascreen = int( file_contents[7])
     if len(file_contents) >= 9:
-        fixLambda    = int( file_contents[8])
+        rho_Lambda_thres = float( file_contents[8])
     if len(file_contents) >= 10:
         fixQ         = int( file_contents[9])
     if len(file_contents) >= 11:
         Nafter       = float(file_contents[10])
     if len(file_contents) >= 12:
         seed         = int(  file_contents[11])
-    print(n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,lambdascreen,fixLambda,fixQ,Nafter)
+    if len(file_contents) >= 13:
+        n_recycle    = int(  file_contents[12])
+    print(n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,lambdascreen,rho_Lambda_thres,fixQ,Nafter,seed,n_recycle)
 
     pool = Pool(processes=params.cores)
     rngenerator_partial = partial(rngenerator,
@@ -118,9 +123,11 @@ def main():
                                   measure=str(measure),
                                   n_tunnel_max=str(n_tunnel_max),
                                   lambdascreen=str(lambdascreen),
-                                  fixLambda=str(fixLambda),
+                                  rho_Lambda_thres=str(rho_Lambda_thres),
                                   fixQ=str(fixQ),
-                                  Nafter=str(Nafter))
+                                  Nafter=str(Nafter),
+                                  seed=str(seed),
+                                  n_recycle=str(n_recycle))
     pool.map(rngenerator_partial, range(0, params.cores))
     pool.close()
     pool.join()

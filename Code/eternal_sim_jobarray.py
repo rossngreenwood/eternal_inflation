@@ -35,8 +35,9 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
 # /hb/software/apps/matlab/bin/
     #call = ['matlab', '-nodisplay', '-nosplash', '-nodesktop', '-nojvm', '-minimize', '-r', '\"test(\'', worker_outfile, '\'),exit\"']
     if platform.system() != "Windows":
-        call = ['sh','/hb/software/apps/matlab/bin/matlab', '-nodisplay','-nosplash','-wait','-nodesktop','-nojvm','-minimize','-r',
-            '\"eis_wrapper(\'' +
+        print("Not windows")
+	call = ['sh','/hb/software/apps/matlab/bin/matlab', '-nodisplay','-nosplash','-wait','-nodesktop','-nojvm','-minimize','-r',
+            'eis_wrapper(\'' +
             worker_outfile + '\',' +
             worker_iter + ',' +
             mv + ',' +
@@ -51,7 +52,7 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
             Nafter + ',' +
             str(randint(1,1000)) + ',' +
             n_recycle +
-            ');exit\"']
+            ');exit']
     else:
         call = ['matlab', '-nodisplay','-nosplash','-wait','-nodesktop','-nojvm','-minimize','-r',
             '\"eis_wrapper(\'' +

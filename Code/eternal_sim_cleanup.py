@@ -25,9 +25,9 @@ def main():
                 first_line = True
                 for line in w_file:
                     # Only print the first line header once
-                    if !first_line || filename != ".worker_0.txt"
+                    if first_line == False or filename != ".worker_0.txt":
                         print(line, file=outfile, end='')
-                    if first_line:
+                    if first_line == True:
                         first_line = False
 
     for filename in worker_files:

@@ -142,7 +142,7 @@ def main():
         for filename in worker_files:
             with open(worker_files[filename]) as w_file:
                 header_line = w_file.readline()
-                if filename == '.worker_0.txt':
+                if filename == 0:
                     print(header_line, file=outfile, end='')
                 for line in w_file:
                     print(line, file=outfile, end='')

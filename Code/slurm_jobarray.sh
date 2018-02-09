@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-#SBATCH --partition=Instruction 
+#SBATCH --partition=128x24
 #SBATCH --job-name=eternal_sim_test
 #SBATCH --output=res.txt
 #SBATCH --ntasks=1
-#SBATCH --time=00:30
-#SBATCH --mem-per-cpu=150
+#SBATCH --time=04:30
+#SBATCH --mem-per-cpu=400
 #
 #SBATCH --array=0-7
 

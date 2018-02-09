@@ -34,8 +34,8 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
     worker_outfile = '.worker_%s.txt' % worker_id
 
     #call = ['matlab', '-nodisplay', '-nosplash', '-nodesktop', '-nojvm', '-minimize', '-r', '\"test(\'', worker_outfile, '\'),exit\"']
-    call = ['matlab', '-nodisplay','-nosplash','-wait','-nodesktop','-nojvm','-minimize','-r',
-        '\"eis_wrapper(\'' +
+    call = ['sh','/hb/software/apps/matlab/bin/matlab', '-nodisplay','-nosplash','-wait','-nodesktop','-nojvm','-minimize','-r',
+        'eis_wrapper(\'' +
         worker_outfile + '\',' +
         worker_iter + ',' +
         mv + ',' +
@@ -48,12 +48,13 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
         rho_Lambda_thres + ',' +
         fixQ + ',' +
         Nafter + ',' +
-        str(randint(1000)) + ',' +
+        str(randint(1,1000)) + ',' +
         n_recycle +
-        ');\"']
+        ');exit']
     subprocess.check_call(call)
 
     logging.info('worker %s received signal to go down.' % worker_id)
+
 
 def main():
     """
@@ -114,19 +115,19 @@ def main():
 
     pool = Pool(processes=params.cores)
     rngenerator_partial = partial(rngenerator,
-        worker_iter=str(n_iter/params.cores),
-        mh=str(mh),
-        mv=str(mv),
-        kmax=str(kmax),
-        gamma=str(gamma),
-        measure=str(measure),
-        n_tunnel_max=str(n_tunnel_max),
-        lambdascreen=str(lambdascreen),
-        rho_Lambda_thres=str(rho_Lambda_thres),
-        fixQ=str(fixQ),
-        Nafter=str(Nafter),
-        seed=str(seed),
-        n_recycle=str(n_recycle))
+                                  worker_iter=str(n_iter/params.cores),
+                                  mh=str(mh),
+                                  mv=str(mv),
+                                  kmax=str(kmax),
+                                  gamma=str(gamma),
+                                  measure=str(measure),
+                                  n_tunnel_max=str(n_tunnel_max),
+                                  lambdascreen=str(lambdascreen),
+                                  rho_Lambda_thres=str(rho_Lambda_thres),
+                                  fixQ=str(fixQ),
+                                  Nafter=str(Nafter),
+                                  seed=str(seed),
+                                  n_recycle=str(n_recycle))
     pool.map(rngenerator_partial, range(0, params.cores))
     pool.close()
     pool.join()

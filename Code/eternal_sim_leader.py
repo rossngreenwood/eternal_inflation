@@ -111,23 +111,24 @@ def main():
         seed         = int(  file_contents[11])
     if len(file_contents) >= 13:
         n_recycle    = int(  file_contents[12])
-    print(n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,lambdascreen,rho_Lambda_thres,fixQ,Nafter,seed,n_recycle)
+    print(n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,
+        lambdascreen,rho_Lambda_thres,fixQ,Nafter,seed,n_recycle)
 
     pool = Pool(processes=params.cores)
     rngenerator_partial = partial(rngenerator,
-                                  worker_iter=str(n_iter/params.cores),
-                                  mh=str(mh),
-                                  mv=str(mv),
-                                  kmax=str(kmax),
-                                  gamma=str(gamma),
-                                  measure=str(measure),
-                                  n_tunnel_max=str(n_tunnel_max),
-                                  lambdascreen=str(lambdascreen),
-                                  rho_Lambda_thres=str(rho_Lambda_thres),
-                                  fixQ=str(fixQ),
-                                  Nafter=str(Nafter),
-                                  seed=str(seed),
-                                  n_recycle=str(n_recycle))
+        worker_iter=str(n_iter/params.cores),
+        mh=str(mh),
+        mv=str(mv),
+        kmax=str(kmax),
+        gamma=str(gamma),
+        measure=str(measure),
+        n_tunnel_max=str(n_tunnel_max),
+        lambdascreen=str(lambdascreen),
+        rho_Lambda_thres=str(rho_Lambda_thres),
+        fixQ=str(fixQ),
+        Nafter=str(Nafter),
+        seed=str(seed),
+        n_recycle=str(n_recycle))
     pool.map(rngenerator_partial, range(0, params.cores))
     pool.close()
     pool.join()
@@ -140,6 +141,9 @@ def main():
     with open(params.output_file, 'w') as outfile:
         for filename in worker_files:
             with open(worker_files[filename]) as w_file:
+                header_line = w_file.readline()
+                if filename == '.worker_0.txt':
+                    print(header_line, file=outfile, end='')
                 for line in w_file:
                     print(line, file=outfile, end='')
     for filename in worker_files:

@@ -330,9 +330,17 @@ methods (Access = protected)
                 convergence_type = 'converged';
             case {3} % Didn't make it over the potential barrier
                 convergence_type = 'undershoot';
-            case {4,5} % Passed meta-stable minimum without stopping
+                disp('under')
+            case {4} % Passed meta-stable minimum without stopping
                 convergence_type = 'overshoot';
-            case {7}
+                disp('over')
+            case {5}
+                if abs(y1(end,2)) < epsabs(2)
+                    convergence_type = 'converged';
+                else
+                    convergence_type = 'overshoot';
+                end
+            otherwise
                 error('FalseVacuumInstanton:IntegralDiverged',...
                     'ODE solver failed to integrate instanton solution.');
         end
@@ -389,7 +397,7 @@ methods
         if self.no_gravity
             d2rho = zeros(size(drho));
         else
-            d2rho = -self.kappa/3*rho.*(dphi.^2 + self.V(phi));
+            d2rho = -self.kappa/3*rho.*(dphi.^2 + self.V(phi.').');
         end
         
         dy = [dphi,d2phi,drho,d2rho];
@@ -510,9 +518,9 @@ methods
                                                 (drho < -1+eps(4)),     +1;...
                 dphi*ysign - eps(2),        (phi-phi0)*ysign > eps(1)   +1;...
                 (phi-phi0)*ysign + eps(1),  true,                       -1;...
-                drho - (-1+eps(4)),         abs(dphi) < eps(2)          +1;...
+                drho - (-1+eps(4)),         true                        -1;... % abs(dphi) < eps(2)
                 rho,                        true,                       -1;...
-                abs(dphi/phi) - 1e5,        true,                       +1
+                ...%abs(dphi/phi) - 1e5,        true,                       +1
             ];
             
         end
@@ -575,7 +583,7 @@ methods
         else
             % Guess phi(r=0) = phi_bar, where V(phi) = V(phi_metaMin)
             x = -log(abs((self.phi_bar-self.phi_absMin)/delta_phi));
-            x = 10;
+            x = 5;
         end
         xincrease = 2.0;
         
@@ -627,18 +635,18 @@ methods
             
             %% Check for Hawking-Moss instanton
             
-            if xmin == xbar && ...
-                    strcmp(ctype_last,'overshoot') && ...
-                    abs(dphi_last) < abs(Y(end,2))-epsabs(2)
-                % Passed minimum of abs(dphi) \rvert_{phi = phi_metaMin}
-                % There is no CDL bubble; the only solution is the Hawking-
-                % Moss instanton that sits on top of the barrier forever.
-                w_top = abs(self.kappa/3*self.V(self.phi_bar_top))^0.5;
-                R = pi/w_top/2;
-                Y = [self.phi_bar_top,0,1/w_top,0,-w_top];
-                useThinWall = false;
-                return
-            end
+%             if xmin == xbar && ...
+%                     strcmp(ctype_last,'overshoot') && ...
+%                     abs(dphi_last) < abs(Y(end,2))-epsabs(2)
+%                 % Passed minimum of abs(dphi) \rvert_{phi = phi_metaMin}
+%                 % There is no CDL bubble; the only solution is the Hawking-
+%                 % Moss instanton that sits on top of the barrier forever.
+%                 w_top = abs(self.kappa/3*self.V(self.phi_bar_top))^0.5;
+%                 R = pi/w_top/2;
+%                 Y = [self.phi_bar_top,0,1/w_top,0,-w_top];
+%                 useThinWall = false;
+%                 return
+%             end
             
             ctype_last = ctype; dphi_last = Y(end,2);
             
@@ -654,6 +662,10 @@ methods
                     else
                         x = .5*(xmin+xmax);
                     end
+%                     xx = linspace(0e3,2e3,1001);
+%                     plot(xx,self.V(xx)); hold on;
+%                     plot(exp(-x)*delta_phi+self.phi_absMin,self.V(exp(-x)*delta_phi+self.phi_absMin),'o'); hold off;
+%                     pause(0.5);
                 case 'overshoot' % x is too high
                     xmax = x;
                     x = .5*(xmin+xmax);
@@ -661,17 +673,27 @@ methods
             
             % Close enough; don't wait for convergence
             if (xmax-xmin) < xtol
+                if abs(xmax-xbar) < xtol
+                    % Passed minimum of abs(dphi) \rvert_{phi = phi_metaMin}
+                    % There is no CDL bubble; the only solution is the Hawking-
+                    % Moss instanton that sits on top of the barrier forever.
+                    w_top = abs(self.kappa/3*self.V(self.phi_bar_top))^0.5;
+                    R = pi/w_top/2;
+                    Y = [self.phi_bar_top,0,1/w_top,0,-w_top];
+                    useThinWall = false;
+                    return
+                end
                 break
             end
             
-%             if ~isinf(self.B_cutoff)
-%                 B = self.find_tunneling_suppression(R,Y);
-%                 disp(['B = ' num2str(B)]);
-%                 if B > self.B_cutoff
-%                     Y(1,1) = nan;
-%                     return
-%                 end
-%             end
+            if ~isinf(self.B_cutoff)
+                B = self.find_tunneling_suppression(R,Y);
+                disp(['B = ' num2str(B)]);
+                if B > self.B_cutoff
+                    Y(1,1) = nan;
+                    return
+                end
+            end
              
         end
         

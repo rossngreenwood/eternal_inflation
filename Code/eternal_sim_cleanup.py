@@ -28,6 +28,7 @@ def main():
                     if first_line == False or filename != ".worker_0.txt":
                         print(line, file=outfile, end='')
                     if first_line == True:
+                        print(line)
                         first_line = False
 
     for filename in worker_files:

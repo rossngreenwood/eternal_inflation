@@ -873,7 +873,9 @@ methods (Access = protected)
             end
             
             try % Solve for instanton profile
+                tic
                 [R,Y,~] = fvi.find_profile([],xtol,phitol,thinCutoff);
+                toc
             catch me
                 switch me.identifier
                     case 'FalseVacuumInstanton:StableFalseVacuum'

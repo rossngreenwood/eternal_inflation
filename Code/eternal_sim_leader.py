@@ -55,7 +55,6 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
 
     logging.info('worker %s received signal to go down.' % worker_id)
 
-
 def main():
     """
     This will try to run transgene from system arguments
@@ -115,19 +114,19 @@ def main():
 
     pool = Pool(processes=params.cores)
     rngenerator_partial = partial(rngenerator,
-                                  worker_iter=str(n_iter/params.cores),
-                                  mh=str(mh),
-                                  mv=str(mv),
-                                  kmax=str(kmax),
-                                  gamma=str(gamma),
-                                  measure=str(measure),
-                                  n_tunnel_max=str(n_tunnel_max),
-                                  lambdascreen=str(lambdascreen),
-                                  rho_Lambda_thres=str(rho_Lambda_thres),
-                                  fixQ=str(fixQ),
-                                  Nafter=str(Nafter),
-                                  seed=str(seed),
-                                  n_recycle=str(n_recycle))
+        worker_iter=str(n_iter/params.cores),
+        mh=str(mh),
+        mv=str(mv),
+        kmax=str(kmax),
+        gamma=str(gamma),
+        measure=str(measure),
+        n_tunnel_max=str(n_tunnel_max),
+        lambdascreen=str(lambdascreen),
+        rho_Lambda_thres=str(rho_Lambda_thres),
+        fixQ=str(fixQ),
+        Nafter=str(Nafter),
+        seed=str(seed),
+        n_recycle=str(n_recycle))
     pool.map(rngenerator_partial, range(0, params.cores))
     pool.close()
     pool.join()

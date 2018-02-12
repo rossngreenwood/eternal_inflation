@@ -268,7 +268,7 @@ methods (Access = public)
                         if isempty(Vstop), Vstop = V(phi(end)); end
                         
                         % Look for an instanton tunneling solution
-                        [log_tunnel_rate,phitunnel,flag_hawking_moss,flag_eternal] = ...
+                        [phitunnel,log_tunnel_rate,flag_hawking_moss,flag_fv_eternal] = ...
                             obj.check_false_vacuum_eternal(...
                             ak,f,phi,V,Vp,Vpp,rho_Lambda,p.n_tunnel_max+1-i_tunnel,Vstop);
                         
@@ -282,7 +282,7 @@ methods (Access = public)
                         
                         record_flag = 2;
                         
-                        data_out(4) = data_out(4) || flag_eternal;
+                        data_out(4) = data_out(4) || flag_fv_eternal;
                         % Record smallest tunneling rate
                         data_out(5) = min(data_out(5),log_tunnel_rate);
                         
@@ -314,10 +314,15 @@ methods (Access = public)
                     else
                         [new_xstop] = find_phistop(real(phistart)/Mh,ak,...
                             1, ... % Vscale
-                            0, ... % rho_Lambda
+                            rho_Lambda, ... % rho_Lambda
                             1, ... % phiscale
                             0 );   % lambdascreenmode
                         phi(ii,5) = new_xstop*Mh;
+                    end
+                    
+                    if V(phi(ii,5)) <= 0
+                        valid_basin(ii) = false; %#ok<AGROW>
+                        break
                     end
                     
                     if ~isnan(phi(ii,4)) && ~(Ntotal(ii) < p.Nafter)
@@ -326,12 +331,10 @@ methods (Access = public)
                         valid_basin(ii) = false; %#ok<AGROW>
                     end
                     
-                    if V(phi(ii,5)) <= 0, break; end
-                    
                 end
                 
                 % Tunneling index of last valid basin
-                i_last = find(cumprod(valid_basin),1,'last');
+                i_last = find(valid_basin,1,'last');
                 if isempty(i_last), i_last = length(mv_sr); end
                 
                 data_out(1) = mv_sr(i_last);
@@ -370,7 +373,8 @@ methods (Access = public)
                     % Set phi(1) = phipeak
                     if isreal(phistart)
                         phi(1+i_tunnel,1) = find_phipeak(...
-                            phi(1+i_tunnel,2)/Mh,ak,1,0,1);
+                            phi(1+i_tunnel,2)/Mh,ak,1,rho_Lambda,1);
+                        phi(1+i_tunnel,1) = phi(1+i_tunnel,1)*Mh;
                     else
                         phi(1+i_tunnel,1) = phi(1+i_tunnel,2);
                     end
@@ -390,7 +394,7 @@ methods (Access = public)
                 
                 f{4} = function_handle.empty;
                 [~,f{1:4}] = obj.gaussian_random_field_1D(p.kmax,p.gamma,ak);
-                Vppp = build_potential(f,p.mv,p.mh,obj.Mpl,3);
+                Vppp = build_potential(f,p.mv*obj.Mpl,p.mh*obj.Mpl,3);
                 
                 Nbefore = Ntotal - p.Nafter; % e-folds before crossing
                 observables = obj.compute_observables(V,Vp,Vpp,Vppp,phi(end,:),Nbefore,obj.Mpl);
@@ -452,86 +456,6 @@ methods (Access = public)
     
 end
 
-methods (Static)
-    
-    function [datastruct] = read_output_file(outfile,record_flags)
-        
-        fid = fopen(outfile,'r');
-        
-        %% Collect meta-data
-        
-        meta_line = fgets(fid); is = 1;
-        
-        [n_iter,~,~,is1] = sscanf(meta_line(is:end),'%E,',1); is = is+is1-1;
-        [mv_0,~,~,is1]   = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
-        [mh,~,~,is1]     = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
-        [Mpl,~,~,is1]    = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
-        [kmax,~,~,is1]   = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
-        [gamma,~,~,is1]  = sscanf(meta_line(is:end),'%f,',1); is = is+is1-1;
-        
-        [measure,~,~,is1]           = sscanf(meta_line(is:end),'%c,',1); is = is+is1-1;
-        [n_tunnel_max,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
-        [lambdascreen,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
-        [rho_Lambda_thres,~,~,is1]  = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
-        [fixQ,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
-        [Nafter,~,~,is1]            = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
-        [seed,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
-        [n_recycle,~,~,is1]         = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
-        
-        %% Read output from simulations
-        
-        data = nan(n_iter,16);
-        
-        for i_ln = 1:n_iter
-            
-            % Query record flag for this line
-            [record_flag] = fscanf(fid,'%d,',1);
-            
-            % Reached end of file?
-            if isempty(record_flag), break, end
-            
-            % Only read data corresponding to queried record flags
-            if nargin >= 2 && ~ismember(record_flag,record_flags)
-                fgets(fid); continue % Skip this line
-            end
-            
-            % Read a line of data
-            switch record_flag
-                case 1
-                    data(i_ln,1:3)  = fscanf(fid,'%G,%d,%G\r\n',3);
-                case 2
-                    data(i_ln,1:5)  = fscanf(fid,'%G,%d,%G,%d,%G\r\n',5);
-                case 3
-                    data(i_ln,1:16) = fscanf(fid,'%G,%d,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G\r\n',16);
-            end
-            
-        end
-        
-        data(isnan(data(:,1)),:) = [];
-        
-        datastruct = struct(...
-            'n_iter',           n_iter,...
-            'mv_0',             mv_0,...
-            'mh',               mh,...
-            'Mpl',              Mpl,...
-            'kmax',             kmax,...
-            'gamma',            gamma,...
-            'measure',          measure,...
-            'n_tunnel_max',     n_tunnel_max,...
-            'lambdascreen',     logical(lambdascreen),...
-            'rho_Lambda_thres', rho_Lambda_thres,...
-            'fixQ',             logical(fixQ),...
-            'Nafter',           Nafter,...
-            'seed',             seed,...
-            'n_recycle',        n_recycle,...
-            'data',             data);
-        
-        fclose(fid);
-        
-    end
-    
-end
-
 %% Slowroll
 
 methods (Access = protected)
@@ -565,13 +489,13 @@ methods (Access = protected)
         
         kappa = 8*pi/obj.Mpl^2;
         
-        V0 = build_potential(f,mv,mh,obj.Mpl);
+        V0 = build_potential(f,mv*obj.Mpl,mh*obj.Mpl);
         V = @(x) V0(x) - rho_Lambda;
         Vp = []; Vpp = [];
         
         if nargin < 5, Vstart = V(phistart); end
         if nargin < 6
-            Vp = build_potential(f,mv,mh,obj.Mpl,1);
+            Vp = build_potential(f,mv*obj.Mpl,mh*obj.Mpl,1);
             Vpstart = Vp(phistart);
         end
         
@@ -585,9 +509,9 @@ methods (Access = protected)
                 phiexit = phi(3);
                 Q = sqrt(V(phiexit)/(150*(Vp(phiexit)./V(phiexit)).^2/2))/pi;
                 mv = obj.parameters.mv*sqrt(Q_target/Q);
-                [V,Vp,Vpp] = build_potential(f,sqrt(Q_target/Q)*mv,mh,obj.Mpl);
+                [V,Vp,Vpp] = build_potential(f,mv*obj.Mpl,mh*obj.Mpl);
             else
-                [Vp,Vpp] = build_potential(f,mv,mh,obj.Mpl,[1 2]);
+                [Vp,Vpp] = build_potential(f,mv*obj.Mpl,mh*obj.Mpl,[1 2]);
             end
             
             %% Identify phiend, phiexit, and phistop
@@ -637,7 +561,7 @@ end
 
 methods (Access = protected)
     
-    function [log_tunnel_rate,phitunnel,flag_hawking_moss,flag_eternal] = check_false_vacuum_eternal(obj,ak,f,phi,V,Vp,Vpp,rho_Lambda,n_tunnel_remaining,Vstop)
+    function [phitunnel,log_tunnel_rate,flag_hawking_moss,flag_fv_eternal] = check_false_vacuum_eternal(obj,ak,f,phi,V,Vp,Vpp,rho_Lambda,n_tunnel_remaining,Vstop)
         % Handle false vacuum tunneling.
         
         if nargin < 7 || isempty(rho_Lambda), rho_Lambda = 0; end
@@ -648,8 +572,9 @@ methods (Access = protected)
         
         phiscale = mh*obj.Mpl;
         
-        flag_eternal = true;
-        stable_rate_cutoff = -1e3;
+        flag_fv_eternal = true;
+        log_stable_rate_cutoff = -1e2;
+        log_tunnel_rate = nan;
         
         %% Locate nearest minima
         
@@ -729,11 +654,11 @@ methods (Access = protected)
                 
                 Vbar = V(phibar);
                 if (Vp(phibar)/Vbar).^2/(16*pi/obj.Mpl^2) > 1
-                    status_bar = SRStatus.eps;
+                    status_bar = 1;
                 elseif abs(Vpp(phibar)/Vbar)/(8*pi/obj.Mpl^2) > 1
-                    status_bar = SRStatus.eta;
+                    status_bar = 2;
                 else
-                    status_bar = SRStatus.ok;
+                    status_bar = 0;
                 end
                 
                 %% Find the start of inflation in the neighboring basin
@@ -808,7 +733,7 @@ methods (Access = protected)
                         B_HM = FalseVacuumInstanton.find_tunneling_suppression_static(...
                             3,kappa,V,phifv{lr}(i_tunnel),R,Y);
                         
-                        if -B_HM >= stable_rate_cutoff
+                        if -B_HM >= log_stable_rate_cutoff
                             % Hawking-Moss instanton is viable
                             lr_continue = false;
                             break
@@ -833,18 +758,18 @@ methods (Access = protected)
             
             if lr_continue, continue, end
             
-            disp('FVFVFVFVFVFVFV');
-                        
+            disp('Computing instanton...');
+            
             %% Do full instanton calculation
             
             xtol         = 1e-4;
-            phitol       = 1e-4;
+            phitol       = 1e-4*mh*obj.Mpl;
             thinCutoff   = 1e-2;
             
             if false
                 
                 % Define potential with rescaled mv = 1
-                [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1/obj.Mpl,mh,obj.Mpl);
+                [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1,mh*obj.Mpl);
                 f_Lambda = rho_Lambda/mv^4/obj.Mpl^4;
                 V_rescale = @(x) V_rescale(x) - f_Lambda;
                 
@@ -873,9 +798,7 @@ methods (Access = protected)
             end
             
             try % Solve for instanton profile
-                tic
                 [R,Y,~] = fvi.find_profile([],xtol,phitol,thinCutoff);
-                toc
             catch me
                 switch me.identifier
                     case 'FalseVacuumInstanton:StableFalseVacuum'
@@ -908,17 +831,18 @@ methods (Access = protected)
         
         %% Choose bubble with the larger tunneling rate
         
-        [log_tunnel_rate,imax] = max(-B);
-        
         if all(isnan(new_phistart))
             phitunnel = NaN;
             return
         end
         
+        [log_tunnel_rate,imax] = max(-B);
+        
         %% Find the new value of phi after tunneling
         
         kappa = 8*pi/obj.Mpl^2;
-        if log_tunnel_rate >= stable_rate_cutoff
+        if log_tunnel_rate > log_stable_rate_cutoff
+            % Tunneling is fast enough
             phitunnel = new_phistart(imax);
             flag_hawking_moss = flag_hawking_moss(imax);
         else
@@ -930,9 +854,11 @@ methods (Access = protected)
         %% Determine if inflation is eternal
         
         if log_tunnel_rate < log(9/4/pi) + 2*log(kappa/3*V(phistop));
-            flag_eternal = true;
+            % Tunneling is slow enough for eternal inflation
+            flag_fv_eternal = true;
         else
-            flag_eternal = false;
+            % Tunneling is too fast for eternal inflation
+            flag_fv_eternal = false;
         end
         
     end
@@ -962,9 +888,11 @@ methods (Access = protected)
         phimin = phiscale^2 * abs(Vpstart./Vstart);
         dphi   = -0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));
         
-        phibreak_sei = nan;
-        phibreak_sei_last = nan;
-        off2on_sei = nan;
+        % SEIC = Stochastic Eternal Inflation Criterion
+        
+        phibreak = nan; % Field values where SEIC changes sign
+        off2on = nan; % True if SEIC goes from (+) to (-) moving downhill
+        phibreak_last = nan;
         
         % Positive if stochastic eternal
         sgn_sei = sign( (kappa*Vstart)^(3/2) - 2*pi*sqrt(3)*(0.607)*abs(Vpstart) );
@@ -984,12 +912,12 @@ methods (Access = protected)
             ii = mod(ind-1,batch)+1;
             if -sgn_sei*((kappa*Vend(ii))^(3/2) - 2*pi*sqrt(3)*(0.607)*abs(Vpend(ii))) > 0
                 if ii > 1
-                    phibreak_sei_last(ind_sei) = phi(ii-1);
+                    phibreak_last(ind_sei) = phi(ii-1);
                 else
-                    phibreak_sei_last(ind_sei) = phi_last;
+                    phibreak_last(ind_sei) = phi_last;
                 end
-                phibreak_sei(ind_sei) = phi(ii);
-                off2on_sei(ind_sei) = 0.5*(1-sgn_sei);
+                phibreak(ind_sei) = phi(ii);
+                off2on(ind_sei) = 0.5*(1-sgn_sei);
                 sgn_sei = -sgn_sei;     % Look for next change in status
                 phi = phi(ii); ii = 1;  % Reset the rate of advance
                 ind_sei = ind_sei + 1;
@@ -998,22 +926,25 @@ methods (Access = protected)
             ind = ind + 1;
         end
         
-        % Reached phiend without finding any eternal inflation
-        if isnan(phibreak_sei(1)), return, end
+        % Reached phiend without satisfying eternal inflation criterion
+        if isnan(phibreak(1)), return, end
         
-        % Find field values at breakdown precisely
+        % Find field values at breakdown precisely using binary search
         fun = @(x) (kappa*V(x)).^(3/2) - 2*pi*sqrt(3)*(0.607)*abs(Vp(x));
-        for i_break = 1:length(phibreak_sei)
+        for i_break = 1:length(phibreak)
             
-            phimax = phibreak_sei(i_break);
-            phimin = phibreak_sei_last(i_break);
-            
+            % Initial bounds
+            phimax = phibreak(i_break);
+            phimin = phibreak_last(i_break);
             phisep = (phimax-phimin);
-            phibreak_sei(i_break) = 0.5*(phimin+phimax);
+            
+            phibreak(i_break) = 0.5*(phimin+phimax);
             
             nbits = 5;
             ind = 1;
             while abs(phisep)*2^(1-ind) > abs(dphi)
+                
+                % Precompute a binary tree of function values
                 if mod(ind,nbits-1) == 1
                     phisep = (phimax-phimin);
                     phi = (phimin + phisep*(2^-nbits)):(phisep*(2^-nbits)):(phimax - phisep*(2^-nbits));
@@ -1021,6 +952,8 @@ methods (Access = protected)
                     ind = 1;
                     ii = 2^(nbits-1);
                 end
+                
+                % Update bounds
                 if fun_vals(ii) > 0
                     phimax = phi(ii);
                     ii = ii - 2^(nbits-1-ind);
@@ -1028,47 +961,48 @@ methods (Access = protected)
                     phimin = phi(ii);
                     ii = ii + 2^(nbits-1-ind);
                 end
-                phibreak_sei(i_break) = 0.5*(phimin+phimax);
+                
+                % Update value
+                phibreak(i_break) = 0.5*(phimin+phimax);
                 ind = ind + 1;
+                
             end
         
         end
         
-        if off2on_sei(end) == 1
-            % SEI ends when inflation ends, if not sooner
-            phibreak_sei(end+1) = phiend;
-            off2on_sei(end+1)   = 0;
+        if off2on(end) == 1 % SEI is satisfied at phiend
+            % Require that SEI ends when inflation ends, if not sooner
+            phibreak(end+1) = phiend;
+            off2on(end+1)   = 0;
         end
         
-        dlna_dphi = @(phi) -V(phi)./Vp(phi);
+        dlna_dphi = @(phi) -V(phi)./Vp(phi); % Integrate this to find N_e
         
         % Check that at least one e-fold elapses with SEI valid
-        for i = find(off2on_sei,1)
-            N = integral(@(x) dlna_dphi(x),phibreak_sei(i),phibreak_sei(i+1));
-            if N*sign(phibreak_sei(i)-phibreak_sei(i+1)) < 1
+        for i = find(off2on,1)
+            N = integral(@(x) dlna_dphi(x),phibreak(i),phibreak(i+1));
+            if N*sign(phibreak(i)-phibreak(i+1)) < 1
                 % SEI epoch is too short; don't count it
-                phibreak_sei(i:i+1) = [];
-                off2on_sei(i:i+1) = [];
+                phibreak(i:i+1) = [];
+                off2on(i:i+1) = [];
             end
         end
         
-        if isempty(phibreak_sei), return, end
+        if isempty(phibreak), return, end
         
-        numStochEpochs = nnz(~off2on_sei);
-        
-        stochasticEIC = @(x) (kappa*V(x)).^(3/2) > 2*pi*sqrt(3)*(0.607)*abs(Vp(x)); % stochasticEIC > 0 -> Eternal
+        numStochEpochs = nnz(~off2on);
         
         % Compute # of e-folds after past SEI breakdown and before phiexit
         if isnan(phiexit)
             return % not applicable
-        elseif stochasticEIC(phiexit)
+        elseif (kappa*V(phiexit)).^(3/2) - 2*pi*sqrt(3)*(0.607)*abs(Vp(phiexit)) > 0
             NSinceStoch = 0; % Eternal at phiexit
-        elseif any((phibreak_sei(~off2on_sei)-phiexit)*Vp(phiexit) > 0)
+        elseif any((phibreak(~off2on)-phiexit)*Vp(phiexit) > 0)
             % Closest breakdown point of SEI to phiexit
-            phib = phibreak_sei((phibreak_sei-phiexit)*Vp(phiexit) > 0 & ~off2on_sei);
-            [~,imin] = min(abs(phib-phiexit));
+            phibreak_last = phibreak((phibreak-phiexit)*Vp(phiexit) > 0 & ~off2on);
+            [~,imin] = min(abs(phibreak_last-phiexit));
             % Integrate e-foldings
-            NSinceStoch = integral(@(x) dlna_dphi(x),phib(imin),phiexit);
+            NSinceStoch = integral(@(x) dlna_dphi(x),phibreak_last(imin),phiexit);
         end
         
         return
@@ -1137,6 +1071,8 @@ methods (Access = protected)
     
     function [flag_topological_eternal] = check_topological_eternal(obj,V,Vp,Vpp,phistart,phipeak)
         
+        p = obj.parameters;
+        
         flag_topological_eternal = nan;
         
         %% Topological Eternal Inflation
@@ -1145,41 +1081,49 @@ methods (Access = protected)
         
         % Determine whether quantum fluctuations could result in at least
         % one Hubble volume descending toward a different minimum of V(phi)
-        if isreal(phistart)
+        if isreal(phistart) % Not Measure A
             H = sqrt(kappa*V(phistart)/3);
-            dphi = H/2/pi;
-            Dphi = -Vp(phistart)/(3*H^2);
+            dphi = H/2/pi; % Amplitude of quantum fluctuation
+            Dphi = -Vp(phistart)/(3*H^2); % Classical field excursion
             if 1/2*erfc(abs(phistart+Dphi-phipeak)/(sqrt(2)*dphi)) < exp(-3)
+                % Not close enough to maximum
                 return
             end
         end
         
-        % Find value of phi at the domain wall boundary
-        phiedge_eps = fzero(@(phi) Vp(phi)./V(phi)/2/kappa - 1,phipeak);
-        phiedge_eta = fzero(@(phi) abs(Vpp(phi)./V(phi)/kappa) - 1,phipeak);
-        [~,icloser] = min(abs(phipeak-[phiedge_eps,phiedge_eta]));
-        phiedge = feval(@(x) x(icloser),[phiedge_eps,phiedge_eta]);
+        % Assuming a domain wall forms around maximum, does it persist?
         
-        % Find value of phi that will descend to phistart in time < t_H
-        phistar = NaN; q = 1;
-        while isnan(phistar)
-            try
-                phistar = fzero(@(phi) phi + Vp(phi)./V(phi) - phiedge, [phipeak q*phiedge]);
-            catch ME
-                if strcmp(ME.identifier,'MATLAB:fzero:ValuesAtEndPtsSameSign')
-                    q = q + 1;
-                    continue
-                end
-                rethrow(ME);
-            end
+        % Find value of phi at the domain wall boundary 
+        % where inflation breaks down
+        [phiedge,status] = obj.find_phiend(phipeak,V,Vp,Vpp,p.mh*obj.Mpl,obj.Mpl,[],[],false,false);
+        if status == 1
+            flag_topological_eternal = false;
+            return
+        elseif status == 4
+            % Inflation doesn't end
+            flag_topological_eternal = true;
+            return
         end
         
+        % Find value of phi that will descend to phiedge in time < t_H
+        dphi_dlna = @(lna,phi) -Vp(phi)./V(phi);
+        [~,phiout] = ode23(dphi_dlna,[1,0.5,0],phiedge);
+        phistar = phiout(3);
+        
+        if isnan(phistar), return, end
+        
         % If the expansion of the inner portion of the domain wall
-        % where (phimax < phi < phistar) replaces loss of the outer
-        % wall where (phistar < phi < edge), then inflation is eternal
+        % where (phipeak < phi < phistar) replaces loss of the outer
+        % wall where (phistar < phi < phiedge), then inflation is eternal
+        % (Problem is effectively 1D - the width of domain wall.)
         if abs(phistar-phipeak) > abs(phiedge-phipeak)*exp(-1)
             flag_topological_eternal = true;
         end
+        
+% %         phiedge_eps = fzero(@(phi) Vp(phi)./V(phi)/2/kappa - 1,phipeak);
+% %         phiedge_eta = fzero(@(phi) abs(Vpp(phi)./V(phi)/kappa) - 1,phipeak);
+% %         [~,icloser] = min(abs(phipeak-[phiedge_eps,phiedge_eta]));
+% %         phiedge = feval(@(x) x(icloser),[phiedge_eps,phiedge_eta]);
         
     end
     
@@ -1827,148 +1771,6 @@ end
 
 methods (Static)
     
-    function plot_histograms(observables,savename)
-        
-        if nargin < 2, savename = ''; end
-        save_fig = [savename '_%s'];
-        
-        save(sprintf(save_fig,'observables'),'observables');
-        
-        style = hgexport('factorystyle');
-        style.Height = 6;
-        style.Width  = 7;
-        style.Bounds = 'tight';
-        style.FontSizeMin = 20;
-        style.LineWidthMin = 1;
-        
-        hist_color = [142 219 255]/255.0;
-        
-        % Power
-        fieldname = 'Q';
-        figure, hist(log10([observables.(fieldname)]),50,hist_color,'Linewidth',0)
-        title('Power: Q'), set(gca,'XTick',-6:4)
-        set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),-6:4,'Un',0))
-        h = findobj(gca,'Type','patch'); h.FaceColor = hist_color; boldify
-        if ~isempty(savename)
-            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-            savefig(sprintf(save_fig,fieldname));
-            print(sprintf(save_fig,fieldname),'-dpng','-r0');
-        end
-        close(gcf)
-        
-        % n_s - Scalar spectral index
-        fieldname = 'n_s';
-        figure, hist([observables.(fieldname)],-0.01:0.05:2,hist_color)
-        title('Scalar Spectral Index: n_s')
-        set(gca,'XLim',[0 2]);
-        h = findobj(gca,'Type','patch');
-        h.FaceColor = hist_color; boldify
-        if ~isempty(savename)
-            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-            savefig(sprintf(save_fig,fieldname));
-            set(gcf,'PaperPositionMode','auto');
-            print(sprintf(save_fig,fieldname),'-dpng','-r0');
-        end
-        close(gcf)
-        
-        % alpha - Running of the spectral index
-        fieldname = 'alpha';
-        figure, hist([observables.(fieldname)],-0.51:0.02:0.51,hist_color)
-        title('Running: \alpha')
-        set(gca,'XLim',[-0.5,0.5]);
-        h = findobj(gca,'Type','patch');
-        h.FaceColor = hist_color; boldify
-        if ~isempty(savename)
-            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-            savefig(sprintf(save_fig,fieldname));
-            set(gcf,'PaperPositionMode','auto');
-            print(sprintf(save_fig,fieldname),'-dpng','-r0');
-        end
-        close(gcf)
-        
-        % n_t - Tensor spectral index
-        fieldname = 'n_t';
-        figure, hist([observables.(fieldname)],-0.051:0.001:0.01,hist_color)
-        title('Tensor Spectral Index: n_t')
-        set(gca,'XLim',[-0.05,0]);
-        h = findobj(gca,'Type','patch');
-        h.FaceColor = hist_color; boldify
-        if ~isempty(savename)
-            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-            savefig(sprintf(save_fig,fieldname));
-            set(gcf,'PaperPositionMode','auto');
-            print(sprintf(save_fig,fieldname),'-dpng','-r0');
-        end
-        close(gcf)
-        
-        % log |Omega_tot - 1|
-        fieldname = 'lgOk';
-        figure, hist(log10(abs([observables.(fieldname)])),50,hist_color)
-        title('$$\log_{10} \vert \Omega_{tot} - 1 \vert $$','Interpreter','LaTex'), set(gca,'XTick',1:5)
-        set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),1:5,'Un',0))
-        set(gca,'XLim',[0,5]);
-        h = findobj(gca,'Type','patch');
-        h.FaceColor = hist_color; boldify
-        if ~isempty(savename)
-            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-            savefig(sprintf(save_fig,fieldname));
-            set(gcf,'PaperPositionMode','auto');
-            print(sprintf(save_fig,fieldname),'-dpng','-r0');
-        end
-        close(gcf)
-        
-        % Number of e-foldings since eternal inflation
-        fieldname = 'NSinceStoch';
-        val = log10([observables.(fieldname)]);
-        figure, hist(val(isreal(val)),50,hist_color)
-        title('Number of e-foldings since eternal');
-        xlim = get(gca,'XLim');
-        set(gca,'XTick',ceil(xlim(1)):floor(xlim(2)))
-        set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),...
-            ceil(xlim(1)):floor(xlim(2)),'Un',0))
-        h = findobj(gca,'Type','patch'); h.FaceColor = hist_color; boldify
-        if ~isempty(savename)
-            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-            savefig(sprintf(save_fig,fieldname));
-            set(gcf,'PaperPositionMode','auto');
-            print(sprintf(save_fig,fieldname),'-dpng','-r0');
-        end
-        close(gcf)
-        
-        % Number of e-foldings of eternal inflation
-        fieldname = 'NStochastic';
-        q = log10([observables.(fieldname)]);
-        figure, hist(q(~isinf(q)),50,hist_color)
-        title('Number of e-foldings eternal');
-        xlim = get(gca,'XLim');
-        set(gca,'XTick',ceil(xlim(1)):floor(xlim(2)))
-        set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),...
-            ceil(xlim(1)):floor(xlim(2)),'Un',0))
-        h = findobj(gca,'Type','patch'); h.FaceColor = hist_color; boldify
-        if ~isempty(savename)
-            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-            savefig(sprintf(save_fig,fieldname));
-            set(gcf,'PaperPositionMode','auto');
-            print(sprintf(save_fig,fieldname),'-dpng','-r0');
-        end
-        close(gcf)
-        
-        % Number of eternal inflation epochs
-        fieldname = 'numStochEpochs';
-        figure, hist([observables.(fieldname)],10,hist_color)
-        title('Number of eternal inflation epochs')
-        h = findobj(gca,'Type','patch');
-        h.FaceColor = hist_color; boldify
-        if ~isempty(savename)
-            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-            savefig(sprintf(save_fig,fieldname));
-            set(gcf,'PaperPositionMode','auto');
-            print(sprintf(save_fig,fieldname),'-dpng','-r0');
-        end
-        close(gcf)
-        
-    end
-    
     function [a,varargout] = gaussian_random_field_1D(n,gamma,a)
         % [a,V,Vp,Vpp,...] = gaussian_random_field(k_max,gamma,coeffs)
         %
@@ -1997,59 +1799,6 @@ methods (Static)
         else
             k = (0:size(a,1)-1).';       % Wavenumber
             q = k/sqrt(numel(k)-1);      % Reduced wavenumber
-        end
-        
-        % Assemble GRF and its derivatives
-        varargout = cell(1,nargout-1);
-        for nd = 0:nargout-2
-            aq = bsxfun(@times,a,q.^nd);
-            switch mod(nd,4)
-                case 0
-                    f = @(x) sum(bsxfun(@times,  cos(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times,  sin(q*x), aq(:,2) ),1);
-                case 1
-                    f = @(x) sum(bsxfun(@times, -sin(q*x), aq(:,1) ) + ...
-                             	 bsxfun(@times,  cos(q*x), aq(:,2) ),1);
-                case 2
-                    f = @(x) sum(bsxfun(@times, -cos(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times, -sin(q*x), aq(:,2) ),1);
-                case 3
-                    f = @(x) sum(bsxfun(@times,  sin(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times, -cos(q*x), aq(:,2) ),1);
-            end
-            varargout{nd+1} = f;
-        end
-        
-    end
-    
-    function [a,varargout] = gaussian_random_field_1D_single(n,gamma,a)
-        % [a,V,Vp,Vpp,...] = gaussian_random_field(k_max,gamma,coeffs)
-        %
-        % Inputs
-        %   n       Number of wavenumbers (integer)
-        %   gamma   A parameter that determines frequency dependence
-        %   a       If provided, then those coefficients are used to reproduce
-        %           a GRF generated by a previous call to this function
-        %
-        % Outputs
-        %   a               Fourier coefficients of GRF
-        %   {V,Vp,Vpp,...}  Gaussian random field and it's 1st, 2nd, ..., nth
-        %                   derivatives, respectively, in function form.
-        
-        % Generate new coefficients
-        % or use existing coefficients
-        if nargin < 3
-            if nargin < 1, n = 50;     end
-            if nargin < 2, gamma = 0;   end
-            k = (0:n).';
-            q = single(k/sqrt(n));
-            sigma = sqrt(q.^gamma .* exp(-q.^2/2));
-            sigma(1) = sigma(1) / sqrt(2);
-            a = randn(length(q),2) .* [sigma sigma];
-            a = single(a/norm(sigma([end:-1:2 1:end]))/sqrt(2));
-        else
-            k = (0:size(a,1)-1).';       % Wavenumber
-            q = single(k/sqrt(numel(k)-1));      % Reduced wavenumber
         end
         
         % Assemble GRF and its derivatives
@@ -2129,19 +1878,233 @@ methods (Static)
         
     end
     
-    function [out] = build_template(c)
+    function [datastruct] = read_output_file(outfile,record_flags)
         
-        varName = c(:,1).';
-        val     = c{:,2};
-        units   = c(:,3).';
-        descrip = c(:,4).';
+        fid = fopen(outfile,'r');
         
-        out = table(c{:,2},'VariableNames',c(:,1).');
-        out.Properties.VariableUnits = units;
-        out.Properties.VariableDescriptions = descrip;
+        %% Collect meta-data
+        
+        meta_line = fgets(fid); is = 1;
+        
+        [n_iter,~,~,is1] = sscanf(meta_line(is:end),'%E,',1); is = is+is1-1;
+        [mv_0,~,~,is1]   = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [mh,~,~,is1]     = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [Mpl,~,~,is1]    = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [kmax,~,~,is1]   = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [gamma,~,~,is1]  = sscanf(meta_line(is:end),'%f,',1); is = is+is1-1;
+        
+        [measure,~,~,is1]           = sscanf(meta_line(is:end),'%c,',1); is = is+is1-1;
+        [n_tunnel_max,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [lambdascreen,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [rho_Lambda_thres,~,~,is1]  = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [fixQ,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [Nafter,~,~,is1]            = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [seed,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [n_recycle,~,~,is1]         = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        
+        %% Read output from simulations
+        
+        data = nan(round(n_iter/10),16);
+        
+        for i_ln = 1:n_iter
+            
+            % Query record flag for this line
+            [record_flag] = fscanf(fid,'%d,',1);
+            
+            % Reached end of file?
+            if isempty(record_flag), break, end
+            
+            % Only read data corresponding to queried record flags
+            if nargin >= 2 && ~ismember(record_flag,record_flags)
+                fgets(fid); continue % Skip this line
+            end
+            
+            % Read a line of data
+            switch record_flag
+                case 1
+                    data(i_ln,1:3)  = fscanf(fid,'%G,%d,%G\r\n',3);
+                case 2
+                    data(i_ln,1:5)  = fscanf(fid,'%G,%d,%G,%d,%G\r\n',5);
+                case 3
+                    data(i_ln,1:16) = fscanf(fid,'%G,%d,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G\r\n',16);
+            end
+            
+        end
+        
+        data(isnan(data(:,1)),:) = [];
+        
+        datastruct = struct(...
+            'n_iter',           n_iter,...
+            'mv_0',             mv_0,...
+            'mh',               mh,...
+            'Mpl',              Mpl,...
+            'kmax',             kmax,...
+            'gamma',            gamma,...
+            'measure',          measure,...
+            'n_tunnel_max',     n_tunnel_max,...
+            'lambdascreen',     logical(lambdascreen),...
+            'rho_Lambda_thres', rho_Lambda_thres,...
+            'fixQ',             logical(fixQ),...
+            'Nafter',           Nafter,...
+            'seed',             seed,...
+            'n_recycle',        n_recycle,...
+            'data',             data);
+        
+        fclose(fid);
         
     end
-
+    
+    function plot_histograms(data,savename)
+        
+        if nargin < 2, savename = ''; end
+        save_fig = [savename '_%s'];
+        
+        observables.numStochEpochs = data(:,6);
+        observables.NSinceStoch = data(:,7);
+        
+        observables.Q = data(:,9);
+        observables.n_s = data(:,11);
+        observables.alpha = data(:,12);
+        observables.n_t = data(:,13);
+        observables.lgOk = data(:,15);
+        
+%         save(sprintf(save_fig,'observables'),'observables');
+        
+        style = hgexport('factorystyle');
+        style.Height = 6;
+        style.Width  = 7;
+        style.Bounds = 'tight';
+        style.FontSizeMin = 20;
+        style.LineWidthMin = 1;
+        
+        hist_color = [142 219 255]/255.0;
+        
+        % Power
+        fieldname = 'Q';
+        figure, hist(log10([observables.(fieldname)]),50,hist_color,'Linewidth',0)
+        title('Power: Q'), set(gca,'XTick',-6:4)
+        set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),-6:4,'Un',0))
+        h = findobj(gca,'Type','patch'); h.FaceColor = hist_color; boldify
+        if ~isempty(savename)
+            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
+            savefig(sprintf(save_fig,fieldname));
+            print(sprintf(save_fig,fieldname),'-dpng','-r0');
+        end
+%         close(gcf)
+        
+        % n_s - Scalar spectral index
+        fieldname = 'n_s';
+        figure, hist([observables.(fieldname)],-0.01:0.05:2,hist_color)
+        title('Scalar Spectral Index: n_s')
+        set(gca,'XLim',[0 2]);
+        h = findobj(gca,'Type','patch');
+        h.FaceColor = hist_color; boldify
+        if ~isempty(savename)
+            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
+            savefig(sprintf(save_fig,fieldname));
+            set(gcf,'PaperPositionMode','auto');
+            print(sprintf(save_fig,fieldname),'-dpng','-r0');
+        end
+%         close(gcf)
+        
+        % alpha - Running of the spectral index
+        fieldname = 'alpha';
+        figure, hist([observables.(fieldname)],-0.51:0.02:0.51,hist_color)
+        title('Running: \alpha')
+        set(gca,'XLim',[-0.5,0.5]);
+        h = findobj(gca,'Type','patch');
+        h.FaceColor = hist_color; boldify
+        if ~isempty(savename)
+            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
+            savefig(sprintf(save_fig,fieldname));
+            set(gcf,'PaperPositionMode','auto');
+            print(sprintf(save_fig,fieldname),'-dpng','-r0');
+        end
+%         close(gcf)
+        
+        % n_t - Tensor spectral index
+        fieldname = 'n_t';
+        figure, hist([observables.(fieldname)],-0.051:0.001:0.01,hist_color)
+        title('Tensor Spectral Index: n_t')
+        set(gca,'XLim',[-0.05,0]);
+        h = findobj(gca,'Type','patch');
+        h.FaceColor = hist_color; boldify
+        if ~isempty(savename)
+            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
+            savefig(sprintf(save_fig,fieldname));
+            set(gcf,'PaperPositionMode','auto');
+            print(sprintf(save_fig,fieldname),'-dpng','-r0');
+        end
+%         close(gcf)
+        
+        % log |Omega_tot - 1|
+        fieldname = 'lgOk';
+        figure, hist(log10(abs([observables.(fieldname)])),50,hist_color)
+        title('$$\log_{10} \vert \Omega_{tot} - 1 \vert $$','Interpreter','LaTex'), set(gca,'XTick',1:5)
+        set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),1:5,'Un',0))
+        set(gca,'XLim',[0,5]);
+        h = findobj(gca,'Type','patch');
+        h.FaceColor = hist_color; boldify
+        if ~isempty(savename)
+            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
+            savefig(sprintf(save_fig,fieldname));
+            set(gcf,'PaperPositionMode','auto');
+            print(sprintf(save_fig,fieldname),'-dpng','-r0');
+        end
+%         close(gcf)
+        
+        % Number of e-foldings since eternal inflation
+        fieldname = 'NSinceStoch';
+        val = log10([observables.(fieldname)]);
+        figure, hist(val(isreal(val)),50,hist_color)
+        title('Number of e-foldings since eternal');
+        xlim = get(gca,'XLim');
+        set(gca,'XTick',ceil(xlim(1)):floor(xlim(2)))
+        set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),...
+            ceil(xlim(1)):floor(xlim(2)),'Un',0))
+        h = findobj(gca,'Type','patch'); h.FaceColor = hist_color; boldify
+        if ~isempty(savename)
+            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
+            savefig(sprintf(save_fig,fieldname));
+            set(gcf,'PaperPositionMode','auto');
+            print(sprintf(save_fig,fieldname),'-dpng','-r0');
+        end
+%         close(gcf)
+        
+% %         % Number of e-foldings of eternal inflation
+% %         fieldname = 'NStochastic';
+% %         q = log10([observables.(fieldname)]);
+% %         figure, hist(q(~isinf(q)),50,hist_color)
+% %         title('Number of e-foldings eternal');
+% %         xlim = get(gca,'XLim');
+% %         set(gca,'XTick',ceil(xlim(1)):floor(xlim(2)))
+% %         set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),...
+% %             ceil(xlim(1)):floor(xlim(2)),'Un',0))
+% %         h = findobj(gca,'Type','patch'); h.FaceColor = hist_color; boldify
+% %         if ~isempty(savename)
+% %             hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
+% %             savefig(sprintf(save_fig,fieldname));
+% %             set(gcf,'PaperPositionMode','auto');
+% %             print(sprintf(save_fig,fieldname),'-dpng','-r0');
+% %         end
+% %         close(gcf)
+        
+        % Number of eternal inflation epochs
+        fieldname = 'numStochEpochs';
+        figure, hist([observables.(fieldname)],10,hist_color)
+        title('Number of eternal inflation epochs')
+        h = findobj(gca,'Type','patch');
+        h.FaceColor = hist_color; boldify
+        if ~isempty(savename)
+            hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
+            savefig(sprintf(save_fig,fieldname));
+            set(gcf,'PaperPositionMode','auto');
+            print(sprintf(save_fig,fieldname),'-dpng','-r0');
+        end
+        close(gcf)
+        
+    end
+    
 end
 
 %% Constructor
@@ -2308,24 +2271,21 @@ end
 
 end
 
-function varargout = build_potential(f,mv,mh,Mpl,d_range)
+function varargout = build_potential(f,Mv,Mh,d_range)
     
     nd = min(length(f),nargout)-1;
-    
-    mv = mv*Mpl;
-    mh = mh*Mpl;
     
     % prefactor = arrayfun(@(n) p.mv.^4 * p.mh^(-n),0:3,'Un',0);
     % potential = cellfun(@(grf,A) @(phi) A*grf(phi/mh),f,prefactor,'Un',0);
     % [V,Vp,Vpp] = deal(potential{1:3});
     
-    mv4 = mv.^4;
+    Mv4 = Mv.^4;
     
-    if nargin < 5
+    if nargin < 4
         for d = 0:nd
             grf = f{1+d};
-            mhmd = mh^(-d);
-            varargout{d+1} = @(phi) mv4 * mhmd * grf(phi/mh); % reshape(grf(phi(:).'),size(phi));
+            mhmd = Mh^(-d);
+            varargout{d+1} = @(phi) Mv4 * mhmd * grf(phi/Mh); % reshape(grf(phi(:).'),size(phi));
         end
         for d = nd+1:max(nd,nargout-1)
             varargout{d+1} = function_handle.empty();
@@ -2334,8 +2294,8 @@ function varargout = build_potential(f,mv,mh,Mpl,d_range)
         for ii = 1:length(d_range)
             d = d_range(ii);
             grf = f{1+d};
-            mhmd = mh^(-d);
-            varargout{ii} = @(phi) mv4 * mhmd * grf(phi/mh); % reshape(grf(phi(:).'),size(phi));
+            mhmd = Mh^(-d);
+            varargout{ii} = @(phi) Mv4 * mhmd * grf(phi/Mh); % reshape(grf(phi(:).'),size(phi));
         end
     end
     
@@ -2363,213 +2323,3 @@ while abs(xmax-xmin) > abs(dx)
 end
 
 end
-
-%% Deprecated
-
-% %     function [code] = gaussian_random_field_1D_py(a)
-% %         
-% %         k = 0:size(a,2)-1;            % Wavenumber
-% %         q = k(:)'/sqrt(numel(k)-1);   % Reduced wavenumber
-% %         
-% %         code = sprintf('def V(phi):\n\treturn 0');
-% %         return
-% %         for kk = 1:length(k)
-% %             code = strcat(code, ...
-% %                 sprintf(' + cos(%.8f*phi) * %.8f',q(kk),a(1,kk)), ...
-% %                 sprintf(' + sin(%.8f*phi) * %.8f',q(kk),a(2,kk)) );
-% %         end
-% %         
-% %     end
-    
-% %         flag_testcase = false;
-% %         if flag_testcase
-% %             fname = 'C:\Users\Ross\OneDrive\Documents\Research\Eclipse Workspace\inf code\src\sample_coeffs_seed_m4.txt';
-% %             data_raw = dlmread(fname,' ');
-% %             kmax = ceil(length(data_raw)/2);
-% %             a = zeros(2,kmax);
-% %             a(1,:) = data_raw(kmax:-1:1);
-% %             a(2,:) = data_raw(kmax:end);
-% %             a(:,1) = a(:,1)/sqrt(2);
-% %             p.Nafter = 1;
-% %         end
-% %         
-% %         % Zoom in on the nearest minimum to approximate a quadratic potential
-% %         flag_quadratic = false;
-% %         if flag_quadratic
-% %             V    = @(phi) (1/2)*p.mv^4*(phi/p.mh).^2;
-% %             Vp   = @(phi) p.mv^4*(phi/p.mh)/p.mh;
-% %             Vpp  = @(phi) p.mv^4/p.mh^2*ones(size(phi));
-% %             Vppp = @(phi) zeros(size(phi));
-% %             phistart = 10;
-% %             p.Nafter = 1;
-% %         end
-
-% %         %% Stochastic Eternal Inflation with Adiabatic Regularization
-% %         
-% %         if false
-% %             % what is m?
-% %             % what to use for H*t?
-% %             H = @(x) sqrt(V(x)/3); v = @(k,H,lna) k./H.*exp(-lna);
-% %             m_H = @(x) m/H(x); n = @(x) sqrt(9/4 - m_H(x).^2);
-% %             adiabaticRegSEIC = @(x) feval(@(v) sqrt(H.^2.*v.^3/(32*pi^2) .* (4*pi * abs(besselh(n,1,v))^2 - ...
-% %                 (m_H(x)^2 + v^2)^(-7/2).*(8*m_H(x)^6 + 3*m_H(x)^4*(3 + 8*v^2) + ...
-% %                 2*m_H(x)^2*v^2*(11 + 12*v^2) + 8*(v^4 + v^6)))),v(k,H,lna)) - 0.61*Delta_phi;
-% %             
-% %             % Find where stochastic eternal inflation starts/ends
-% %             % Should always be eternal at phimax
-% %             intv_ind  = find(diff(adiabaticRegSEIC(phi_N)));
-% %             phibreak = arrayfun(@(i) fzero(adiabaticRegSEIC,phi_N(i:i+1)),intv_ind);
-% %             
-% %             if isempty(phibreak) || adiabaticRegSEIC(phiend)
-% %                 obj.observables.NsinceEternal_AR = NaN; % Model is eternal up until phiend
-% %             else
-% %                 [~,imin] = min(abs(phibreak - phiend));
-% %                 obj.observables.NsinceEternal_AR = integral(dlna_dphi,phibreak(imin),phistart);
-% %             end
-% %         end
-
-%             phiedge = sqrt( 1 + 2*V0/Vpp0 + sqrt(-(4*V0 + Vpp0))*sqrt(-Vpp0)/Vpp0 );
-
-% %     template = EternalInflationSimulator.build_template({...
-% %             'timestamp',     nan('double'),     's',        'Timestamp of this experiment';...
-% %             'status',        int8(-1),          '',         'Fate of this inflation scenario';...
-% %             'Ntotal',       nan('single'),     '',         'Total number of e-foldings of inflation';...
-% %             'Q',             nan('single'),     'M_pl',     'Amplitude of the scalar power spectrum at exit scale';...
-% %             'r',             nan('single'),     '',         'Tensor-to-scalar ratio';...
-% %             'n_s',           nan('single'),     '',         'Scalar spectral index';...
-% %             'alpha',         nan('single'),     '',         'Running of the scalar spectral index';...
-% %             'n_t',           nan('single'),     '',         'Tensor spectral index';...
-% %             'dlgrho',        nan('single'),     '',         'Change in log(\rho) from exit scale to end of inflation';...
-% %             'lgOk',          nan('single'),     '',         'log |\Omega - 1| (measure of flatness)';...
-% %             'rho_Lambda',    nan('single'),     'M_pl^4',   'Vacuum energy of reheating minimum';...
-% %             ...
-% %             'NStochastic',   nan('single'),     '',         'Number of e-foldings of inflation during which stochastic eternal inflation criterion is valid';...
-% %             'NSinceStoch',   nan('single'),     '',         'Number of e-foldings of inflation elapsed before starting point since stochastic eternal inflation criterion was valid';...
-% %             'numStochEpochs',int8(-1),          '',         'Number of patches on the potential with stochastic eternal inflation';...
-% %             ...
-% %             'numTopolEpochs',int8(-1),          '',         'Number of patches on the potential with toplogical eternal inflation' });
-    
-% %         batch = repmat(struct(),1e3,1);
-% %         
-% %         for i_iter = 1:obj.parameters.n_iter
-% %             
-% %             obs = slowroll_with_tunneling(obj,0);
-% %             
-% %             % Time consuming
-% %             for field = reshape(setdiff(fieldnames(obs),fieldnames(batch)),1,[])
-% %                 [batch.(field{:})] = deal([]);
-% %             end
-% %             for field = reshape(setdiff(fieldnames(batch),fieldnames(obs)),1,[])
-% %                 obs.(field{:}) = [];
-% %             end
-% %             if ~issorted(fieldnames(batch)), batch = orderfields(batch); end
-% %             batch(mod(i_iter-1,1e3)+1) = orderfields(obs);
-% %             
-% %             if mod(i_iter,1e3) == 0
-% %                 fprintf('Progress: %2.1f%%\n',(i_iter*100.0)/obj.parameters.n_iter);
-% % %                 for field = reshape(setdiff(fieldnames(batch),fieldnames(obj.observables)),1,[])
-% % %                     [obj.observables.(field{:})] = deal([]);
-% % %                 end
-% % %                 obs.observables(i_iter-1e3+(1:1e3)) = batch;
-% %                 obj.observables{i_iter/1e3} = batch;
-% %             end
-% %             
-% %             if mod(i_iter,1e5) == 0
-% %                 save('ndim_slowroll_last_run','obj');
-% %             end
-% %             
-% %         end
-
-% %             %% Simulate slow roll
-% %             
-% %             % Generate potential as a Gaussian random field
-% %             [a,f{1:4}] = obj.gaussian_random_field_1D(50,p.gamma);
-% %             V = @(phi) p.mv^4*feval(@(grf) grf(phi/p.mh),f{1});
-% %             
-% %             [obs] = obj.slowroll(f);
-% %             
-% %             if n_tunnel == n_tunnel_max, break, end
-             
-
-% %     function [phitunnel] = check_false_vacuum_eternal_old(obj,a,potential,phi,mv)
-% %         % Handle false vacuum tunneling.
-% %         % Wrapper for Python-coded false-vacuum instanton calculation.
-% %         
-% %         p = obj.parameters;
-% %         
-% %         phistop   = phi(end);
-% %         phitunnel = NaN;
-% %         
-% %         V = potential{1};
-% %         
-% % %         status = obj.compute_status(V,Vp,Vpp,phistop);
-% % %         if status ~= 4, return; end
-% % %         disp('Status = 4');
-% %         
-% %         % Find nearest neighbor minima to phistop
-% %         phispace = phistop + linspace(-10*p.mh,10*p.mh,1001);
-% %         [~,approx_mins] = findpeaks(-V(phispace));
-% %         [~,imin] = min(abs(phispace(approx_mins)-phistop));
-% %         nearest_mins = phispace(nonzeros(pos(approx_mins(imin+[-1 1]))));
-% %         
-% %         a = a.';
-% %         
-% %         p.V    = V;
-% %         p.M_Pl = sqrt(8*pi);
-% %         
-% %         % 
-% %         tunneling_rate = zeros(size(nearest_mins));
-% %         for L_R = 1:numel(nearest_mins)
-% %             
-% %             phi_metaMin = phistop;
-% %             phi_absMin  = nearest_mins(L_R);
-% %             
-% %             if V(phi_absMin) > V(phi_metaMin) || V(phi_absMin) < 0
-% %                 continue
-% %             end
-% %             
-% % %             a = py.list(a(:).');
-% % %             try
-% % %                 % Calculate Euclidean action for instanton solution
-% % %                 S_E = py.InstantonWrapper.callInstanton(...
-% % %                     a,mv,p.mh,phi_absMin,phi_metaMin);
-% % %             catch err
-% % %                 disp(err.message);
-% % %                 continue
-% % %             end
-% %             
-% %             %%
-% %             p.phi_absMin    = +4.5e-1;
-% %             p.phi_metaMin   = -4.5e-1;
-% %             
-% %             fvi = FalseVacuumInstanton(p);
-% %             
-% %             [R,Y,Rerr] = fvi.findProfile();
-% %             S = fvi.findAction(R,Y);
-% %             
-% %             %%
-% %             
-% %             disp('Success');
-% %             hbar = 1;
-% %             preFactor = 1;
-% %             
-% %             % Calculate tunneling rate
-% %             tunneling_rate(L_R) = preFactor*exp(-S_E/hbar);
-% %             
-% %         end
-% %         
-% %         % Choose "true" vacuum with the larger tunneling rate
-% %         [tunneling_rate,imax] = max(tunneling_rate);
-% %         
-% %         datastruct.tunneling_rate = tunneling_rate;
-% %         
-% %         rateThreshold = 1e-5;
-% %         if tunneling_rate < rateThreshold, return, end
-% %         
-% %         % Find the new value of phi post-tunneling
-% %         phitunnel = findNewPhistart(nearest_mins(imax));
-% %         
-% %         datastruct.phitunnel = phitunnel;
-% %         
-% %     end
-    

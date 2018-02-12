@@ -686,14 +686,14 @@ methods
                 break
             end
             
-            if ~isinf(self.B_cutoff)
-                B = self.find_tunneling_suppression(R,Y);
-                disp(['B = ' num2str(B)]);
-                if B > self.B_cutoff
-                    Y(1,1) = nan;
-                    return
-                end
-            end
+%             if ~isinf(self.B_cutoff)
+%                 B = self.find_tunneling_suppression(R,Y);
+%                 disp(['B = ' num2str(B)]);
+%                 if B > self.B_cutoff
+%                     Y(1,1) = nan;
+%                     return
+%                 end
+%             end
              
         end
         

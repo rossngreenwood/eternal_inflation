@@ -21,8 +21,6 @@ properties ( SetAccess = immutable )
     no_gravity = false  % Run without the effects of gravity
     flag_plot  = false  % Plot results for debugging
     
-    B_cutoff = Inf;
-    
 end
 
 methods
@@ -106,14 +104,6 @@ methods
                 self.flag_plot = val.flag_plot;
             else
                 error('flag_plot must be a scalar logical.');
-            end
-        end
-        
-        if isfield(val,'B_cutoff')
-            if isscalar(val.B_cutoff) && isreal(val.B_cutoff)
-                self.B_cutoff = val.B_cutoff;
-            else
-                error('B_cutoff must be a real number.');
             end
         end
         
@@ -537,7 +527,7 @@ end
 
 methods
     
-    function [R,Y,useThinWall] = find_profile(self,xguess,xtol,phitol,thinCutoff,rmin,rmax)
+    function [R,Y,useThinWall] = find_profile(self,xguess,xtol,phitol,thinCutoff,B_cutoff,rmin,rmax)
         % Calculate the bubble profile by iteratively over/undershooting.
         % 
         % This is very similar to :method:`SingleFieldInstanton.find_profile`,
@@ -567,6 +557,7 @@ methods
         if nargin < 3, xtol             = 1e-4; end
         if nargin < 4, phitol           = 1e-4; end
         if nargin < 5, thinCutoff       = 1e-2; end
+        if nargin < 6, B_cutoff         = Inf;  end
         if nargin < 6, rmin             = 1e-4; end
         if nargin < 7, rmax             = 1e+4; end
         
@@ -689,7 +680,7 @@ methods
 %             if ~isinf(self.B_cutoff)
 %                 B = self.find_tunneling_suppression(R,Y);
 %                 disp(['B = ' num2str(B)]);
-%                 if B > self.B_cutoff
+%                 if B > B_cutoff
 %                     Y(1,1) = nan;
 %                     return
 %                 end

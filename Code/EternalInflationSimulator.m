@@ -164,7 +164,6 @@ methods (Access = public)
                 %% Check if there is a minimum close to rho_Lambda_thres
                 
                 rho_Lambda  = 0;
-                rho_Lambda_buffer = -1e-15; % Allow the potential minimum to be slightly negative
                 
                 % Find the first local minimum
                 [xstop] = find_phistop(real(phistart)/Mh,ak,...
@@ -571,6 +570,8 @@ methods (Access = protected)
         if nargin < 7 || isempty(rho_Lambda), rho_Lambda = 0; end
         if nargin < 8, n_tunnel_remaining = 1; end
         
+        flag_rescale_potential = false;
+        
         mv = obj.parameters.mv;
         mh = obj.parameters.mh;
         
@@ -700,7 +701,7 @@ methods (Access = protected)
                     else
                         
                         % Compute total number of slow roll e-folds
-                        dlna_dphi = @(phi) (-8*pi/obj.m_Pl^2*V(phi)./Vp(phi));
+                        dlna_dphi = @(phi) (kappa*V(phi)./Vp(phi));
                         points = linspace(phistart,phiend,max(10,abs(phistart-phiend)/mh/obj.m_Pl*10));
                         Ntotal_trapz = trapz(points,dlna_dphi(points));
                         if  Ntotal_trapz > 0.7*obj.parameters.Nafter
@@ -771,8 +772,9 @@ methods (Access = protected)
             xtol         = 1e-4;
             phitol       = 1e-4;
             thinCutoff   = 1e-2;
+            B_cutoff     = 1e4;
             
-            if false
+            if flag_rescale_potential
                 
                 % Define potential with rescaled mv = 1
                 [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1,mh*obj.m_Pl);
@@ -786,8 +788,7 @@ methods (Access = protected)
                     'd2V',          Vpp_rescale,...
                     'm_Pl',         obj.m_Pl,...
                     'phi_metaMin',  phistop,...
-                    'phi_absMin',   near_minima{lr}(1),...
-                    'B_cutoff',     1e4 );
+                    'phi_absMin',   near_minima{lr}(1) );
                 
             else
                 
@@ -798,8 +799,7 @@ methods (Access = protected)
                     'd2V',          Vpp,...
                     'm_Pl',         obj.m_Pl,...
                     'phi_metaMin',  phistop,...
-                    'phi_absMin',   near_minima{lr}(1),...
-                    'B_cutoff',     1e4 );
+                    'phi_absMin',   near_minima{lr}(1) );
                 
             end
             
@@ -827,7 +827,7 @@ methods (Access = protected)
             % Get tunneling suppression rate B = -log(\lambda)
             % using appropriately scaled radial coordinate
             % B = S_bubble - S_background
-            if false
+            if flag_rescale_potential
                 B(lr) = fvi.find_tunneling_suppression(R,Y)/mv^4/obj.m_Pl^4;
             else
                 B(lr) = fvi.find_tunneling_suppression(R,Y);
@@ -847,7 +847,6 @@ methods (Access = protected)
         
         %% Find the new value of phi after tunneling
         
-        kappa = 8*pi/obj.m_Pl^2;
         if log_tunnel_rate > log_stable_rate_cutoff
             % Tunneling is fast enough
             phitunnel = new_phistart(imax);
@@ -1392,7 +1391,7 @@ methods (Static)
         eta = Vpp(phiexit)./V_exit/kappa;
         xi2 = Vp(phiexit).*Vppp(phiexit)./V_exit^2/kappa^2;
         
-        observables.Q           = sqrt(V_exit/(150*eps)*kappa*obj.m_Pl^2)/pi; % dimensionless
+        observables.Q           = sqrt(V_exit/(150*eps)*kappa*m_Pl^2)/pi; % dimensionless
         observables.r           = 16*eps;
         observables.n_s         = 1-6*eps+2*eta;
         observables.alpha       = 16*eps*eta - 24*eps^2 - 2*xi2;

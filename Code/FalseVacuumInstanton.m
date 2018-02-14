@@ -13,7 +13,7 @@ properties ( SetAccess = immutable )
     phi_absMin          % Location of absolute minimum    (final)
     
     alpha   = 3         % Dimension of volume-bounding n-sphere (d-1)
-    kappa   = 8*pi      % $\kappa = 8\pi G = 8\pi/M_Pl^2$
+    kappa   = 8*pi      % $\kappa = 8\pi G = 8\pi/m_Pl^2 = 1/M_Pl$; Default m_Pl = 1
     phi_bar             % Edge of barrier (where V(phi_bar) = V(phi_metaMin))
     phi_bar_top         % Top of the barrier
     rscale              % Characteristic length scale
@@ -85,11 +85,11 @@ methods
             end
         end
         
-        if isfield(val,'M_Pl')
-            if isscalar(val.M_Pl) && isreal(val.M_Pl) && val.M_Pl > 0
-                self.kappa = 8*pi/val.M_Pl^2;
+        if isfield(val,'m_Pl')
+            if isscalar(val.m_Pl) && isreal(val.m_Pl) && val.m_Pl > 0
+                self.kappa = 8*pi/val.m_Pl^2;
             else
-                error('M_Pl must be a positive real number');
+                error('m_Pl must be a positive real number');
             end
         end
         

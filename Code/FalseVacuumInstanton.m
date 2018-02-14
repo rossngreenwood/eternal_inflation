@@ -320,10 +320,8 @@ methods (Access = protected)
                 convergence_type = 'converged';
             case {3} % Didn't make it over the potential barrier
                 convergence_type = 'undershoot';
-                disp('under')
             case {4} % Passed meta-stable minimum without stopping
                 convergence_type = 'overshoot';
-                disp('over')
             case {5}
                 if abs(y1(end,2)) < epsabs(2)
                     convergence_type = 'converged';

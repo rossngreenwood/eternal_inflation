@@ -24,7 +24,7 @@ function eis_wrapper(...
     if nargin < 7,  measure = 'B';          end
     if nargin < 8,  n_tunnel_max = 3;       end
     if nargin < 9,  lambdascreen = true;    end
-    if nargin < 10, rho_Lambda_thres = 1e-7;end
+    if nargin < 10, rho_Lambda_thres = 0.0039; end
     if nargin < 11, fixQ = false;           end
     if nargin < 12, Nafter = 55;            end
     if nargin < 13 || seed == -1, seed = randi(1e5); end

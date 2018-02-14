@@ -22,7 +22,7 @@ properties
         'measure',            'B',...   % Measure on initial conditions
         'n_tunnel_max',       1,...     % Max number of tunneling events to simulate
         'n_recycle',          4,...     % # of times to reuse same V(phi) with different phi0 value
-        'rho_Lambda_thres',   1e-7,...  % Threshold below which vacuum energy is considered "small"
+        'rho_Lambda_thres',   0,...     % Threshold below which vacuum energy is considered "small"
         'outfile',            ''...     % Path to output text file
         );
     
@@ -168,7 +168,7 @@ methods (Access = public)
                 % Find the first local minimum
                 [xstop] = find_phistop(real(phistart)/Mh,ak,...
                     1, ... % Vscale
-                    -p.rho_Lambda_thres/p.mv^4, ...
+                    -p.rho_Lambda_thres^4/p.mv^4, ...
                     1, ... % phiscale
                     p.lambdascreenmode );
                 
@@ -182,7 +182,7 @@ methods (Access = public)
                     end
                     
                     fstop = f{1}(xstop);
-                    if abs(fstop) < p.rho_Lambda_thres/p.mv^4
+                    if abs(fstop) < p.rho_Lambda_thres^4/p.mv^4
                         % Vacuum energy is already close to a possible
                         % value for lambda
                         rho_Lambda = fstop*Mv^4;
@@ -206,7 +206,7 @@ methods (Access = public)
                                         f{1}(near_minima{lr}(i_tunnel)) < 0 || ...
                                         diff(f{1}([near_minima{lr}(i_tunnel),phifv{lr}(i_tunnel)])) < 0
                                     break
-                                elseif abs(f{1}(near_minima{lr}(i_tunnel))) < p.rho_Lambda_thres/p.mv^4
+                                elseif abs(f{1}(near_minima{lr}(i_tunnel))) < p.rho_Lambda_thres^4/p.mv^4
                                     rho_Lambda = f{1}(near_minima{lr}(i_tunnel))*Mv^4;
                                     found = true;    % Don't keep looking
                                     break

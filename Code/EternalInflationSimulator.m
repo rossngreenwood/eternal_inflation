@@ -399,16 +399,15 @@ methods (Access = public)
                 
                 Nbefore = Ntotal - p.Nafter; % e-folds before crossing
                 observables = obj.compute_observables(V,Vp,Vpp,Vppp,phi(end,:),Nbefore,obj.m_Pl);
-                for fn = fieldnames(observables).'
-                    data_out(9) = observables.Q;
-                    data_out(10) = observables.r;
-                    data_out(11) = observables.n_s;
-                    data_out(12) = observables.alpha;
-                    data_out(13) = observables.n_t;
-                    data_out(14) = observables.dlgrho;
-                    data_out(15) = observables.lgOk;
-                    data_out(16) = observables.rho_Lambda/obj.m_Pl^4; % Save dimensionless value
-                end
+                
+                data_out(9)  = observables.Q;
+                data_out(10) = observables.r;
+                data_out(11) = observables.n_s;
+                data_out(12) = observables.alpha;
+                data_out(13) = observables.n_t;
+                data_out(14) = observables.dlgrho;
+                data_out(15) = observables.lgOk;
+                data_out(16) = observables.rho_Lambda/obj.m_Pl^4; % Save dimensionless value
                 
             end % for goto
             

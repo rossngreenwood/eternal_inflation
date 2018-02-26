@@ -562,17 +562,16 @@ methods
         delta_phi = self.phi_metaMin - self.phi_absMin;
         
         % Set x parameters
-        xbar = -log(abs((self.phi_bar_top-self.phi_absMin)/delta_phi));
+        xtop = -log(abs((self.phi_bar_top-self.phi_absMin)/delta_phi));
+        xbar = -log(abs((self.phi_bar-self.phi_absMin)/delta_phi));
         
-        xmin = xbar; % No further toward meta min than top of the barrier
+        xmin = xtop; % No further toward meta min than top of the barrier
         xmax = Inf;  % No initial limit on how close to absolute minimum
         
         if ~isempty(xguess)
             x = xguess;
         else
-            % Guess phi(r=0) = phi_bar, where V(phi) = V(phi_metaMin)
-            x = -log(abs((self.phi_bar-self.phi_absMin)/delta_phi));
-            x = 5;
+            x = xbar;
         end
         xincrease = 2.0;
         
@@ -662,7 +661,7 @@ methods
             
             % Close enough; don't wait for convergence
             if (xmax-xmin) < xtol
-                if abs(xmax-xbar) < xtol
+                if abs(xmax-xtop) < xtol
                     % Passed minimum of abs(dphi) \rvert_{phi = phi_metaMin}
                     % There is no CDL bubble; the only solution is the Hawking-
                     % Moss instanton that sits on top of the barrier forever.

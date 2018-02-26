@@ -11,8 +11,7 @@ from random import randint
 from functools import partial
 from multiprocessing import Manager, Pool
 
-
-def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_max, lambdascreen, rho_Lambda_thres, fixQ, Nafter, seed, n_recycle, output_dir):
+def eis_wrapper(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_max, lambdascreen, rho_Lambda_thres, fixQ, Nafter, seed, n_recycle, output_dir):
     """
     Generate a random ross n g
 
@@ -34,23 +33,23 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
     worker_outfile = output_dir + ('.worker_%s.txt' % worker_id)
 
     #call = ['matlab', '-nodisplay', '-nosplash', '-nodesktop', '-nojvm', '-minimize', '-r', '\"test(\'', worker_outfile, '\'),exit\"']
-    call = ['sh','/hb/software/apps/matlab/bin/matlab', '-nodisplay','-nosplash','-wait','-nodesktop','-nojvm','-minimize','-r',
-        'warning(\'off\');eis_wrapper(\'' +
-        worker_outfile + '\',' +
-        worker_iter + ',' +
-        mv + ',' +
-        mh + ',' +
-        kmax + ',' +
-        gamma + ',' +
-        '\'' + measure + '\',' +
-        n_tunnel_max + ',' +
-        lambdascreen + ',' +
-        rho_Lambda_thres + ',' +
-        fixQ + ',' +
-        Nafter + ',' +
-        str(randint(1,1000)) + ',' +
-        n_recycle +
-        ');exit']
+    call = ['sh','/hb/software/apps/matlab/bin/matlab', '-nodisplay','-nosplash','-nodesktop','-nojvm','-r',
+        'warning(\'off\');eis=EternalInflationSimulator(' +
+        '\'outfile\',' + '\'' + worker_outfile + '\',' +
+        '\'n_iter\',' + worker_iter + ',' +
+        '\'mv\',' + mv + ',' +
+        '\'mh\',' + mh + ',' +
+        '\'kmax\',' + kmax + ',' +
+        '\'gamma\',' + gamma + ',' +
+        '\'measure\',' + '\'' + measure + '\',' +
+        '\'n_tunnel_max\',' + n_tunnel_max + ',' +
+        '\'lambdascreenmode\',' + lambdascreen + ',' +
+        '\'rho_Lambda_thres\',' + rho_Lambda_thres + ',' +
+        '\'fixQ\',' + fixQ + ',' +
+        '\'Nafter\',' + Nafter + ',' +
+        '\'seed\',' + str(randint(1,10000)) + ',' +
+        '\'n_recycle\',' + n_recycle +
+        ');eis.main();exit']
     subprocess.check_call(call)
 
     logging.info('worker %s received signal to go down.' % worker_id)
@@ -116,7 +115,7 @@ def main():
         lambdascreen,rho_Lambda_thres,fixQ,Nafter,seed,n_recycle)
 
     pool = Pool(processes=params.cores)
-    rngenerator_partial = partial(rngenerator,
+    eis_wrapper_partial = partial(eis_wrapper,
         worker_iter=str(n_iter/params.cores),
         mh=str(mh),
         mv=str(mv),
@@ -131,12 +130,11 @@ def main():
         seed=str(seed),
         n_recycle=str(n_recycle),
         output_dir=params.output_dir)
-    pool.map(rngenerator_partial, range(0, params.cores))
+    pool.map(eis_wrapper_partial, range(0, params.cores))
     pool.close()
     pool.join()
 
     os.system("echo \"Combining output...\"")
-    # time.sleep(10)
 
     # Now that all the processes have completed, we need to process the worker specific vcfs
     worker_files = {i: '.worker_%s.txt' % i for i in range(0, params.cores)}
@@ -145,6 +143,7 @@ def main():
             with open(params.output_dir + worker_files[filename]) as w_file:
                 header_line = w_file.readline()
                 if filename == 0:
+                    # Only write the header line once
                     print(header_line, file=outfile, end='')
                 for line in w_file:
                     print(line, file=outfile, end='')

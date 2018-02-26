@@ -14,6 +14,8 @@ function eis_wrapper(...
         seed,               ...   % Seed for the random number generator
         n_recycle           ...   %
     )
+    % A wrapper function used by the Python script eternal_sim_leader.py to
+    % pass sim parameters to a new EternalInflationSimulator object
     
     if nargin < 1,  outfile = '';           end
     if nargin < 2,  n_iter = 1e3;           end
@@ -24,25 +26,17 @@ function eis_wrapper(...
     if nargin < 7,  measure = 'B';          end
     if nargin < 8,  n_tunnel_max = 3;       end
     if nargin < 9,  lambdascreen = true;    end
-    if nargin < 10, rho_Lambda_thres = 0.0039; end
+    if nargin < 10, rho_Lambda_thres = 0;   end
     if nargin < 11, fixQ = false;           end
     if nargin < 12, Nafter = 55;            end
-    if nargin < 13 || seed == -1, seed = randi(1e5); end
+    if nargin < 13, seed = randi(1e5);      end
     if nargin < 14, n_recycle = 4;          end
     
-%     seed = 94335;
-
-    %% Create output file
+    if seed == -1
+        seed = randi(1e5);
+    end
     
-%     fid = fopen(outfile,'a');
-%     if fid == -1
-%         fid = fopen(outfile,'w'); fclose(fid);
-%         fid = fopen(outfile,'a');
-%     end
-%     fprintf(fid,'%E,%.4G,%.4G,%d,%.2f,%s,%d,%d,%.4G,%d,%.2f\r\n',...
-%         n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,...
-%         logical(lambdascreen),rho_Lambda_thres,logical(fixQ),Nafter);
-%     fclose(fid);
+    %% Create output file
     
     disp(['outfile: ' outfile]);
     
@@ -64,9 +58,9 @@ function eis_wrapper(...
         'outfile',            outfile,...
         'n_recycle',          n_recycle );
     
-    eis.main()
+    eis.simulate()
     
-    
+end
     
     
     

@@ -12,7 +12,7 @@ from functools import partial
 from multiprocessing import Manager, Pool
 
 
-def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_max, lambdascreen, rho_Lambda_thres, fixQ, Nafter, seed, n_recycle):
+def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_max, lambdascreen, rho_Lambda_thres, fixQ, Nafter, seed, n_recycle, output_dir):
     """
     Generate a random ross n g
 
@@ -31,11 +31,11 @@ def rngenerator(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
     """
     worker_id = str(worker_id)
     logging.info('worker %s is up and running.' % worker_id)
-    worker_outfile = '.worker_%s.txt' % worker_id
+    worker_outfile = output_dir + ('.worker_%s.txt' % worker_id)
 
     #call = ['matlab', '-nodisplay', '-nosplash', '-nodesktop', '-nojvm', '-minimize', '-r', '\"test(\'', worker_outfile, '\'),exit\"']
     call = ['sh','/hb/software/apps/matlab/bin/matlab', '-nodisplay','-nosplash','-wait','-nodesktop','-nojvm','-minimize','-r',
-        'eis_wrapper(\'' +
+        'warning(\'off\');eis_wrapper(\'' +
         worker_outfile + '\',' +
         worker_iter + ',' +
         mv + ',' +
@@ -65,6 +65,7 @@ def main():
     parser.add_argument('--cores', dest='cores', type=int, help='Number of cores to use.', required=False, default=1)
     # parser.add_argument('--n_iter', dest='n_iter', type=int, help='Total number of iterations.', required=False, default=10)
     parser.add_argument('--output_file', dest='output_file', type=str, help='Output filename.', required=False, default='outfile.txt')
+    parser.add_argument('--output_dir', dest='output_dir', type=str, help='Output directory.', required=False, default='')
     params = parser.parse_args()
 
     # Default parameter values
@@ -128,7 +129,8 @@ def main():
         fixQ=str(fixQ),
         Nafter=str(Nafter),
         seed=str(seed),
-        n_recycle=str(n_recycle))
+        n_recycle=str(n_recycle),
+        output_dir=params.output_dir)
     pool.map(rngenerator_partial, range(0, params.cores))
     pool.close()
     pool.join()
@@ -138,9 +140,9 @@ def main():
 
     # Now that all the processes have completed, we need to process the worker specific vcfs
     worker_files = {i: '.worker_%s.txt' % i for i in range(0, params.cores)}
-    with open(params.output_file, 'w') as outfile:
+    with open(params.output_dir + params.output_file, 'w') as outfile:
         for filename in worker_files:
-            with open(worker_files[filename]) as w_file:
+            with open(params.output_dir + worker_files[filename]) as w_file:
                 header_line = w_file.readline()
                 if filename == 0:
                     print(header_line, file=outfile, end='')
@@ -148,7 +150,7 @@ def main():
                     print(line, file=outfile, end='')
     for filename in worker_files:
         # Delete the temp files now that we're done with them.
-        os.remove(worker_files[filename])
+        os.remove(params.output_dir + worker_files[filename])
 
 if __name__ == '__main__':
     main()

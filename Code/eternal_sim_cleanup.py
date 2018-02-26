@@ -22,14 +22,11 @@ def main():
     with open(params.output_file, 'w') as outfile:
         for filename in worker_files:
             with open(worker_files[filename]) as w_file:
-                first_line = True
+                header_line = w_file.readline()
+		if filename == 0:
+		    print(header_line, file=outfile, end='')
                 for line in w_file:
-                    # Only print the first line header once
-                    if first_line == False or filename != ".worker_0.txt":
-                        print(line, file=outfile, end='')
-                    if first_line == True:
-                        print(line)
-                        first_line = False
+                    print(line, file=outfile, end='')
 
     for filename in worker_files:
         # Delete the temp files now that we're done with them.

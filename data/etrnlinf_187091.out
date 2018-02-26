@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "eternal_sim_leader.py", line 156, in <module>
+srun: error: hbcomp-011: task 0: Exited with exit code 1
+    main()
+  File "eternal_sim_leader.py", line 87, in main
+    file_object = open(params.input_file)
+IOError: [Errno 2] No such file or directory: '../data/input/infile_$@.txt'

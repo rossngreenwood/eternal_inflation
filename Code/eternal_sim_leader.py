@@ -43,9 +43,9 @@ def eis_wrapper(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
         '\'gamma\',' + gamma + ',' +
         '\'measure\',' + '\'' + measure + '\',' +
         '\'n_tunnel_max\',' + n_tunnel_max + ',' +
-        '\'lambdascreenmode\',' + lambdascreen + ',' +
+        '\'lambdascreenmode\',logical(' + lambdascreen + '),' +
         '\'rho_Lambda_thres\',' + rho_Lambda_thres + ',' +
-        '\'fixQ\',' + fixQ + ',' +
+        '\'fixQ\',logical(' + fixQ + '),' +
         '\'Nafter\',' + Nafter + ',' +
         '\'seed\',' + str(randint(1,10000)) + ',' +
         '\'n_recycle\',' + n_recycle +

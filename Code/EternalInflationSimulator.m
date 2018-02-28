@@ -58,6 +58,8 @@ methods (Access = public)
             p.n_iter,p.mv,p.mh,obj.m_Pl,p.kmax,p.gamma,p.measure,p.n_tunnel_max,...
             p.lambdascreenmode,p.rho_Lambda_thres,p.fixQ,p.Nafter,p.seed,p.n_recycle);
         
+        fclose(fid);
+        
         % Seed the random number generator
         if ~isnan(p.seed), rng(p.seed); end
         
@@ -436,21 +438,27 @@ methods (Access = public)
             % 15 	lgOk            (float,4)   3
             % 16 	rho_Lambda      (float,4)   3
             
+            % Open output file for recording results
+            
             switch record_flag
-                case 1
-                    fprintf(fid,'%d,%.4G,%d,%.2G\r\n',...
-                        [1 data_out(1:3)]);
+%                 case 1
+%                     fid = fopen(p.outfile,'at');
+%                     fprintf(fid,'%d,%.4G,%d,%.2G\r\n',...
+%                         [1 data_out(1:3)]);
+%                     fclose(fid);
                 case 2
+                    fid = fopen(p.outfile,'at');
                     fprintf(fid,'%d,%.4G,%d,%.2G,%d,%.4G\r\n',...
                         [2 data_out(1:5)]);
+                    fclose(fid);
                 case 3
+                    fid = fopen(p.outfile,'at');
                     fprintf(fid,'%d,%.4G,%d,%.2G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
                         [3 data_out(1:16)]);
+                    fclose(fid);
             end
             
         end % for i_iter
-        
-        fclose(fid);
         
     end
     
@@ -1873,6 +1881,7 @@ methods (Static)
         %% Read output from simulations
         
         data = nan(round(n_iter/10),16);
+        mbytes = 0;
         
         for i_ln = 1:n_iter
             
@@ -1881,6 +1890,13 @@ methods (Static)
             
             % Reached end of file?
             if isempty(record_flag), break, end
+            
+            bytes = ftell(fid);
+            
+            if bytes/1024000.0 > mbytes+1
+                mbytes = floor(bytes/1024000.0);
+                disp([num2str(mbytes) ' MB']);
+            end
             
             % Only read data corresponding to queried record flags
             if nargin >= 2 && ~ismember(record_flag,record_flags)
@@ -1930,11 +1946,11 @@ methods (Static)
         observables.numStochEpochs = data(:,6);
         observables.NSinceStoch = data(:,7);
         
-        observables.Q = data(:,9);
-        observables.n_s = data(:,11);
-        observables.alpha = data(:,12);
-        observables.n_t = data(:,13);
-        observables.lgOk = data(:,15);
+        observables.Q       = data(:,9);
+        observables.n_s     = data(:,11);
+        observables.alpha   = data(:,12);
+        observables.n_t     = data(:,13);
+        observables.lgOk    = data(:,15);
         
 %         save(sprintf(save_fig,'observables'),'observables');
         
@@ -1979,7 +1995,7 @@ methods (Static)
         fieldname = 'alpha';
         figure, hist([observables.(fieldname)],-0.51:0.02:0.51,hist_color)
         title('Running: \alpha')
-        set(gca,'XLim',[-0.5,0.5]);
+%         set(gca,'XLim',[-0.5,0.5]);
         h = findobj(gca,'Type','patch');
         h.FaceColor = hist_color; boldify
         if ~isempty(savename)
@@ -1994,7 +2010,7 @@ methods (Static)
         fieldname = 'n_t';
         figure, hist([observables.(fieldname)],-0.051:0.001:0.01,hist_color)
         title('Tensor Spectral Index: n_t')
-        set(gca,'XLim',[-0.05,0]);
+%         set(gca,'XLim',[-0.05,0]);
         h = findobj(gca,'Type','patch');
         h.FaceColor = hist_color; boldify
         if ~isempty(savename)
@@ -2024,7 +2040,7 @@ methods (Static)
         % Number of e-foldings since eternal inflation
         fieldname = 'NSinceStoch';
         val = log10([observables.(fieldname)]);
-        figure, hist(val(isreal(val)),50,hist_color)
+        figure, hist(val(isfinite(val)),12,hist_color)
         title('Number of e-foldings since eternal');
         xlim = get(gca,'XLim');
         set(gca,'XTick',ceil(xlim(1)):floor(xlim(2)))
@@ -2039,37 +2055,21 @@ methods (Static)
         end
 %         close(gcf)
         
-% %         % Number of e-foldings of eternal inflation
-% %         fieldname = 'NStochastic';
-% %         q = log10([observables.(fieldname)]);
-% %         figure, hist(q(~isinf(q)),50,hist_color)
-% %         title('Number of e-foldings eternal');
-% %         xlim = get(gca,'XLim');
-% %         set(gca,'XTick',ceil(xlim(1)):floor(xlim(2)))
-% %         set(gca,'XTickLabel',arrayfun(@(x) sprintf('10^{%1i}',x),...
-% %             ceil(xlim(1)):floor(xlim(2)),'Un',0))
-% %         h = findobj(gca,'Type','patch'); h.FaceColor = hist_color; boldify
-% %         if ~isempty(savename)
-% %             hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
-% %             savefig(sprintf(save_fig,fieldname));
-% %             set(gcf,'PaperPositionMode','auto');
-% %             print(sprintf(save_fig,fieldname),'-dpng','-r0');
-% %         end
-% %         close(gcf)
-        
         % Number of eternal inflation epochs
         fieldname = 'numStochEpochs';
-        figure, hist([observables.(fieldname)],10,hist_color)
+        val = [observables.(fieldname)];
+        figure, hist(val(val>0),10,hist_color)
         title('Number of eternal inflation epochs')
         h = findobj(gca,'Type','patch');
         h.FaceColor = hist_color; boldify
+        set(gca,'XTick',[1 2 3])
         if ~isempty(savename)
             hgexport(gcf,'-clipboard',style,'applystyle',true); drawnow
             savefig(sprintf(save_fig,fieldname));
             set(gcf,'PaperPositionMode','auto');
             print(sprintf(save_fig,fieldname),'-dpng','-r0');
         end
-        close(gcf)
+%         close(gcf)
         
     end
     

@@ -34,7 +34,7 @@ def eis_wrapper(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_m
 
     #call = ['matlab', '-nodisplay', '-nosplash', '-nodesktop', '-nojvm', '-minimize', '-r', '\"test(\'', worker_outfile, '\'),exit\"']
     call = ['sh','/hb/software/apps/matlab/bin/matlab', '-nodisplay','-nosplash','-nodesktop','-nojvm','-r',
-        'warning(\'off\');eis=EternalInflationSimulator(' +
+        'warning(\'on\');eis=EternalInflationSimulator(' +
         '\'outfile\',' + '\'' + worker_outfile + '\',' +
         '\'n_iter\',' + worker_iter + ',' +
         '\'mv\',' + mv + ',' +

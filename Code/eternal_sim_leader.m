@@ -26,10 +26,10 @@ function eternal_sim_leader(cores,input_file,output_file,output_dir)
     [seed,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
     [n_recycle,~,~,is1]         = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
     
-    disp(n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,...
-        lambdascreen,rho_Lambda_thres,fixQ,Nafter,seed,n_recycle);
-    
-    eis_wrapper_partial = @(wid) eis_wrapper(wid,...
+%    disp(n_iter,mv,mh,kmax,gamma,measure,n_tunnel_max,...
+%        lambdascreen,rho_Lambda_thres,fixQ,Nafter,seed,n_recycle);
+    worker_iter = floor(n_iter/cores);
+    eis_wrapper_partial = @(wid,flag_fvi) eis_wrapper(wid,flag_fvi,...
         worker_iter,...
         mh,...
         mv,...
@@ -46,10 +46,12 @@ function eternal_sim_leader(cores,input_file,output_file,output_dir)
         output_dir);
         
     parpool(cores)
+    flag_fvi = Composite();
+    for i = 1:cores, flag_fvi{i} = 0; end
     spmd
-        eis_wrapper_partial(labindex);
+        eis_wrapper_partial(labindex,flag_fvi);
     end
-    
+
     disp('Combining output...')
     
 %     % Now that all the processes have completed, we need to process the worker specific vcfs
@@ -73,7 +75,7 @@ function eternal_sim_leader(cores,input_file,output_file,output_dir)
     
 end
 
-function eis_wrapper(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_max, lambdascreen, rho_Lambda_thres, fixQ, Nafter, seed, n_recycle, output_dir)
+function eis_wrapper(worker_id, flag_fvi, worker_iter, mh, mv, kmax, gamma, measure, n_tunnel_max, lambdascreen, rho_Lambda_thres, fixQ, Nafter, seed, n_recycle, output_dir)
     
     worker_id = num2str(worker_id);
     worker_outfile = [output_dir sprintf('.worker_%s.txt',worker_id)];
@@ -95,7 +97,7 @@ function eis_wrapper(worker_id, worker_iter, mh, mv, kmax, gamma, measure, n_tun
         'Nafter',Nafter,...
         'seed',randi(10000),...
         'n_recycle',n_recycle);
-    eis.main();
+    eis.main(flag_fvi);
     
 end
 

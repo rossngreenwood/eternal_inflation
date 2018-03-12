@@ -3,7 +3,7 @@
 #SBATCH --partition=128x24
 #SBATCH --job-name=etrnlinf
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=24
+#SBATCH --cpus-per-task=23
 #SBATCH --mem-per-cpu=5000
 #SBATCH --time=08:00:00
 #SBATCH --output=../data/etrnlinf_%j.out
@@ -22,6 +22,15 @@ do
   outfile+=$test_id
   outfile+=".txt"
   
+  cmd+="eternal_sim_leader("
+  cmd+="23,'"
+  cmd+=$infile
+  cmd+="','../data/out_"
+  cmd+=$test_id
+  cmd+="/','"
+  cmd+=$outfile
+  cmd+="')"
+
   mkdir -p ../data/out_$test_id
-  srun python eternal_sim_leader.py --cores 23 --input_file $infile --output_dir ../data/out_$test_id/ --output_file $outfile
+  srun sh /hb/software/apps/matlab/bin/matlab -nodisplay -nodesktop -nosplash -r $cmd
 done

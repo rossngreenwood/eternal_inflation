@@ -29,9 +29,9 @@ def main():
                 for line in w_file:
                     print(line, file=outfile, end='')
 
-    for filename in worker_files:
-        # Delete the temp files now that we're done with them.
-        os.remove(params.output_dir + worker_files[filename])
+    #for filename in worker_files:
+    #    # Delete the temp files now that we're done with them.
+    #    os.remove(params.output_dir + worker_files[filename])
 
 if __name__ == '__main__':
     main()

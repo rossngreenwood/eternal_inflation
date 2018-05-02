@@ -49,7 +49,7 @@ function eternal_sim_leader(cores,input_file,output_file,output_dir)
 %     flag_fvi = Composite();
 %     for i = 1:cores, flag_fvi{i} = 0; end
     spmd
-        eis_wrapper_partial(labindex);
+        eis_wrapper_partial(labindex-1);
     end
 
     disp('Combining output...')

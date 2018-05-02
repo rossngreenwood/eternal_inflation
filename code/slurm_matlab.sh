@@ -3,9 +3,9 @@
 #SBATCH --partition=128x24
 #SBATCH --job-name=etrnlinf
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=23
-#SBATCH --mem-per-cpu=5000
-#SBATCH --time=08:00:00
+#SBATCH --cpus-per-task=24
+#SBATCH --mem-per-cpu=1000
+#SBATCH --time=02:00:00
 #SBATCH --output=../data/etrnlinf_%j.out
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=fail
@@ -22,15 +22,15 @@ do
   outfile+=$test_id
   outfile+=".txt"
   
-  cmd+="eternal_sim_leader("
-  cmd+="23,'"
+  cmd="eternal_sim_leader("
+  cmd+="24,'"
   cmd+=$infile
+  cmd+="','"
+  cmd+=$outfile
   cmd+="','../data/out_"
   cmd+=$test_id
-  cmd+="/','"
-  cmd+=$outfile
-  cmd+="')"
-
+  cmd+="/');exit"
+  
   mkdir -p ../data/out_$test_id
   srun sh /hb/software/apps/matlab/bin/matlab -nodisplay -nodesktop -nosplash -r $cmd
 done

@@ -265,7 +265,7 @@ methods (Access = public)
                                         diff(f{1}([near_minima{lr}(i_tunnel),phifv{lr}(i_tunnel)])) < 0
                                     break
                                 elseif abs(f{1}(near_minima{lr}(i_tunnel))) < p.rho_Lambda_thres^4/p.mv^4
-                                    rho_Lambda = f{1}(near_minima{lr}(i_tunnel))*Mv^4;
+                                    rho_Lambda(lr) = f{1}(near_minima{lr}(i_tunnel))*Mv^4;
                                     i_basin(lr) = i_tunnel;
                                     found = true;    % Don't keep looking
                                     break
@@ -471,14 +471,14 @@ methods (Access = public)
                 Nbefore = Ntotal - p.Nafter; % e-folds before horizon crossing
                 observables = obj.compute_observables(V,Vp,Vpp,Vppp,phi(end,:),Nbefore,obj.m_Pl);
                 
-                data_out(9)  = observables.Q;
-                data_out(10) = observables.r;
-                data_out(11) = observables.n_s;
-                data_out(12) = observables.alpha;
-                data_out(13) = observables.n_t;
-                data_out(14) = observables.dlgrho;
-                data_out(15) = observables.lgOk;
-                data_out(16) = observables.rho_Lambda/obj.m_Pl^4; % Save dimensionless value
+                data_out(9)  = observables.Q(1);
+                data_out(10) = observables.r(1);
+                data_out(11) = observables.n_s(1);
+                data_out(12) = observables.alpha(1);
+                data_out(13) = observables.n_t(1);
+                data_out(14) = observables.dlgrho(1);
+                data_out(15) = observables.lgOk(1);
+                data_out(16) = observables.rho_Lambda(1)/obj.m_Pl^4; % Save dimensionless value
                 
             end % for goto
             
@@ -849,7 +849,7 @@ methods (Access = protected)
             phitol       = 1e-4;
             thinCutoff   = 1e-2;
             B_cutoff     = 1e4;
-            
+            try
             if flag_rescale_potential
                 
                 % Define potential with rescaled mv = 1
@@ -878,7 +878,10 @@ methods (Access = protected)
                     'phi_absMin',   near_minima{lr}(1) );
                 
             end
-            
+            catch me
+                continue
+            end
+
             try % Solve for instanton profile
                 [R,Y,~] = fvi.find_profile([],xtol,phitol,thinCutoff);
             catch me
@@ -888,7 +891,7 @@ methods (Access = protected)
                     case 'FalseVacuumInstanton:IntegralDiverged'
                         continue % Integration failed; assume no tunneling
                     otherwise
-                        rethrow(me);
+                        continue; %rethrow(me);
                 end
             end
             

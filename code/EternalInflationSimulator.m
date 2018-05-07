@@ -59,6 +59,7 @@ methods (Access = public)
         
         % Create output text file, write metadata header
         fid = fopen(p.outfile,'wt');
+        disp(p.outfile);
         fprintf(fid,'%E,%.4G,%.4G,%.4G,%d,%.2f,%s,%d,%d,%.4G,%d,%.3f,%d,%d\r\n',...
             p.n_iter,p.mv,p.mh,obj.m_Pl,p.kmax,p.gamma,p.measure,p.n_tunnel_max,...
             p.lambdascreenmode,p.rho_Lambda_thres,p.fixQ,p.Nafter,p.seed,p.n_recycle);
@@ -316,6 +317,7 @@ methods (Access = public)
                     
                 end
                 
+                data_out(4) = rho_Lambda(1)/obj.m_Pl^4; % Save dimensionless value
                 %% Simulate inflation with tunneling events
                 
                 record_flag = 1;
@@ -324,7 +326,7 @@ methods (Access = public)
                 valid_basin = [];
                 
                 phi = nan(1,5);
-                data_out(4) = false;
+                data_out(5) = false;
                 
                 goto_break = false;
                 for i_tunnel = 0:p.n_tunnel_max
@@ -350,9 +352,9 @@ methods (Access = public)
                         
                         record_flag = 2;
                         
-                        data_out(4) = data_out(4) || flag_fv_eternal;
+                        data_out(5) = data_out(5) || flag_fv_eternal;
                         % Record smallest tunneling rate
-                        data_out(5) = min(data_out(5),log_tunnel_rate);
+                        data_out(6) = min(data_out(6),log_tunnel_rate);
                         
                         if flag_hawking_moss
                             if phitunnel < phi(end)
@@ -455,9 +457,9 @@ methods (Access = public)
                     flag_topological_eternal = obj.check_topological_eternal(...
                         V,Vp,Vpp,phistart,phi(it,1));
                     
-                    data_out(6) = max(0,data_out(6)) + max(0,numStochEpochs);
-                    data_out(7) = NSinceStoch; % Only keep the value from the last basin
-                    data_out(8) = max(0,data_out(8)) + max(0,flag_topological_eternal);
+                    data_out(7) = max(0,data_out(7)) + max(0,numStochEpochs);
+                    data_out(8) = NSinceStoch; % Only keep the value from the last basin
+                    data_out(9) = max(0,data_out(9)) + max(0,flag_topological_eternal);
                     
                 end
                 
@@ -471,14 +473,13 @@ methods (Access = public)
                 Nbefore = Ntotal - p.Nafter; % e-folds before horizon crossing
                 observables = obj.compute_observables(V,Vp,Vpp,Vppp,phi(end,:),Nbefore,obj.m_Pl);
                 
-                data_out(9)  = observables.Q(1);
-                data_out(10) = observables.r(1);
-                data_out(11) = observables.n_s(1);
-                data_out(12) = observables.alpha(1);
-                data_out(13) = observables.n_t(1);
-                data_out(14) = observables.dlgrho(1);
-                data_out(15) = observables.lgOk(1);
-                data_out(16) = observables.rho_Lambda(1)/obj.m_Pl^4; % Save dimensionless value
+                data_out(10)  = observables.Q(1);
+                data_out(11) = observables.r(1);
+                data_out(12) = observables.n_s(1);
+                data_out(13) = observables.alpha(1);
+                data_out(14) = observables.n_t(1);
+                data_out(15) = observables.dlgrho(1);
+                data_out(16) = observables.lgOk(1);
                 
             end % for goto
             
@@ -489,41 +490,42 @@ methods (Access = public)
             % 2     Checked for false vacuum tunneling
             % 3     Found a valid basin with sufficient N_e
             
-            % Idx   Output          Type        Record Flag
-            % 1     mv              (float,4)   1,2,3
+            % Idx   	Output          Type        Record Flag
+            % 1     	mv              (float,4)   1,2,3
             % 2  	status          (int)       1,2,3
-            % 3     Ntotal          (float,2)   1,2,3
-            % 4  	flag_fv_eternal (bool)      2,3
-            % 5  	log_tunnel_rate (float,4)   2,3
-            % 6  	numStochEpochs  (int)       3
-            % 7  	NSinceStoch     (float,2)   3
-            % 8  	numTopolEpochs  (int)       3
-            % 9  	Q               (float,4)   3
-            % 10 	r               (float,4)   3
-            % 11 	n_s             (float,4)   3
-            % 12 	alpha           (float,4)   3
-            % 13 	n_t             (float,4)   3
-            % 14 	dlgrho          (float,4)   3
-            % 15 	lgOk            (float,4)   3
-            % 16 	rho_Lambda      (float,4)   3
+            % 3     	Ntotal          (float,2)   1,2,3
+            % 4		rho_Lambda      (float,4)   3
+            % 5  	flag_fv_eternal (bool)      2,3
+            % 6  	log_tunnel_rate (float,4)   2,3
+            % 7  	numStochEpochs  (int)       3
+            % 8  	NSinceStoch     (float,2)   3
+            % 9  	numTopolEpochs  (int)       3
+            % 10  	Q               (float,4)   3
+            % 11 	r               (float,4)   3
+            % 12 	n_s             (float,4)   3
+            % 13 	alpha           (float,4)   3
+            % 14 	n_t             (float,4)   3
+            % 15 	dlgrho          (float,4)   3
+            % 16 	lgOk            (float,4)   3
             
             % Open output file for recording results
             % Record various amounts of data based on how far code ran
             
+            %    disp(['rho_Lambda = ' num2str(rho_Lambda)]);
             switch record_flag
                 case 1
                     fid = fopen(p.outfile,'at');
-                    fprintf(fid,'%d,%.4G,%d,%.2G\r\n',...
-                        [1 data_out(1:3)]);
+                    fprintf(fid,'%d,%.4G,%d,%.2G,%.4G\r\n',...
+                        [1 data_out(1:4)]);
                     fclose(fid);
                 case 2
                     fid = fopen(p.outfile,'at');
-                    fprintf(fid,'%d,%.4G,%d,%.2G,%d,%.4G\r\n',...
-                        [2 data_out(1:5)]);
+                    fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G\r\n',...
+                        [2 data_out(1:6)]);
                     fclose(fid);
                 case 3
                     fid = fopen(p.outfile,'at');
-                    fprintf(fid,'%d,%.4G,%d,%.2G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
+                    fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
                         [3 data_out(1:16)]);
                     fclose(fid);
             end
@@ -1975,11 +1977,95 @@ methods (Static)
             % Read a line of data
             switch record_flag
                 case 1
+                    data(i_ln,1:4)  = fscanf(fid,'%G,%d,%G,%G\r\n',4);
+                case 2
+                    data(i_ln,1:6)  = fscanf(fid,'%G,%d,%G,%G,%d,%G\r\n',5);
+                case 3
+                    data(i_ln,1:16) = fscanf(fid,'%G,%d,%G,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G\r\n',16);
+            end
+            
+        end
+        
+        data(isnan(data(:,1)),:) = [];
+        
+        datastruct = struct(...
+            'n_iter',           n_iter,...
+            'mv_0',             mv_0,...
+            'mh',               mh,...
+            'm_Pl',             m_Pl,...
+            'kmax',             kmax,...
+            'gamma',            gamma,...
+            'measure',          measure,...
+            'n_tunnel_max',     n_tunnel_max,...
+            'lambdascreen',     logical(lambdascreen),...
+            'rho_Lambda_thres', rho_Lambda_thres,...
+            'fixQ',             logical(fixQ),...
+            'Nafter',           Nafter,...
+            'seed',             seed,...
+            'n_recycle',        n_recycle,...
+            'data',             data);
+        
+        fclose(fid);
+        
+    end
+    
+    function [datastruct] = read_output_file_old(outfile,record_flags)
+        
+        fid = fopen(outfile,'r');
+        
+        %% Collect meta-data
+        
+        meta_line = fgets(fid); is = 1;
+        
+        [n_iter,~,~,is1] = sscanf(meta_line(is:end),'%E,',1); is = is+is1-1;
+        [mv_0,~,~,is1]   = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [mh,~,~,is1]     = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [m_Pl,~,~,is1]    = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [kmax,~,~,is1]   = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [gamma,~,~,is1]  = sscanf(meta_line(is:end),'%f,',1); is = is+is1-1;
+        
+        [measure,~,~,is1]           = sscanf(meta_line(is:end),'%c,',1); is = is+is1-1;
+        [n_tunnel_max,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [lambdascreen,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [rho_Lambda_thres,~,~,is1]  = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [fixQ,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [Nafter,~,~,is1]            = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+        [seed,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        [n_recycle,~,~,is1]         = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+        
+        %% Read output from simulations
+        
+        data = nan(round(abs(n_iter)/10),16);
+        mbytes = 0;
+        
+        for i_ln = 1:abs(n_iter)
+            
+            % Query record flag for this line
+            [record_flag] = fscanf(fid,'%d,',1);
+            
+            % Reached end of file?
+            if isempty(record_flag), break, end
+            
+            bytes = ftell(fid);
+            
+            if bytes/1024000.0 > mbytes+1
+                mbytes = floor(bytes/1024000.0);
+                disp([num2str(mbytes) ' MB']);
+            end
+            
+            % Only read data corresponding to queried record flags
+            if nargin >= 2 && ~ismember(record_flag,record_flags)
+                fgets(fid); continue % Skip this line
+            end
+            
+            % Read a line of data
+            switch record_flag
+                case 1
                     data(i_ln,1:3)  = fscanf(fid,'%G,%d,%G\r\n',3);
                 case 2
                     data(i_ln,1:5)  = fscanf(fid,'%G,%d,%G,%d,%G\r\n',5);
                 case 3
-                    data(i_ln,1:16) = fscanf(fid,'%G,%d,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G\r\n',16);
+                    data(i_ln,1:15) = fscanf(fid,'%G,%d,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G\r\n',15);
             end
             
         end

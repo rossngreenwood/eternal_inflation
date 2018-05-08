@@ -1,9 +1,7 @@
 #!/bin/bash
 #
-#SBATCH --partition=128x24
 #SBATCH --job-name=etrnlinf
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=24
 #SBATCH --mem-per-cpu=1000
 #SBATCH --time=12:00:00
 #SBATCH --output=../data/etrnlinf_%j.out
@@ -14,21 +12,26 @@
 
 echo $SLURM_TASK_PID
 
+cores="24"
 range_flag=0
-while getopts ":r" opt; do
-  case $opt in
+while getopts ":r::c:" opt; do
+  echo "${OPTARG}"
+  case "${opt}" in
     r)
       range_flag=1
       ;;
-    \?)
-      echo "Invalid option: -$OPTARG" >&2
+    c)
+      cores="${OPTARG}"
+      ;;
+    *)
+      echo "Invalid option: -$OPTARG" # >&2
       ;;
   esac
 done
 
 if [[ $range_flag -gt 0 ]]; then
 
-  for ((test_id=$2; test_id<=$3; test_id++))
+  for ((test_id=${@:(-2):1}; test_id<=${@: -1}; test_id++))
   do
     printf -v id_str '%04d' $test_id
     
@@ -49,7 +52,8 @@ if [[ $range_flag -gt 0 ]]; then
     outdir+="/"
     
     cmd="eternal_sim_leader("
-    cmd+="24,'"
+    cmd+=$cores
+    cmd+=",'"
     cmd+=$infile
     cmd+="','"
     cmd+=$outfile
@@ -59,8 +63,8 @@ if [[ $range_flag -gt 0 ]]; then
     
     mkdir -p ../data/out_$id_str
     srun sh /hb/software/apps/matlab/bin/matlab -nodisplay -nodesktop -r $cmd
-    python eternal_sim_cleanup.py --cores 24 --output_dir $outdir --output_file $outfile
-    python eternal_sim_truncate.py --cores 24 --output_dir $outdir --output_file $outfile_t
+    python eternal_sim_cleanup.py --cores $cores --output_dir $outdir --output_file $outfile
+    python eternal_sim_truncate.py --cores $cores --output_dir $outdir --output_file $outfile_t
   done
 
 else
@@ -84,7 +88,8 @@ else
     outdir+="/"
     
     cmd="eternal_sim_leader("
-    cmd+="24,'"
+    cmd+=$cores
+    cmd+=",'"
     cmd+=$infile
     cmd+="','"
     cmd+=$outfile
@@ -94,8 +99,8 @@ else
     
     mkdir -p ../data/out_$test_id
     srun sh /hb/software/apps/matlab/bin/matlab -r $cmd
-    python eternal_sim_cleanup.py --cores 24 --output_dir $outdir --output_file $outfile
-    python eternal_sim_truncate.py --cores 24 --output_dir $outdir --output_file $outfile_t
+    python eternal_sim_cleanup.py --cores $cores --output_dir $outdir --output_file $outfile
+    python eternal_sim_truncate.py --cores $cores --output_dir $outdir --output_file $outfile_t
   done
 
 fi

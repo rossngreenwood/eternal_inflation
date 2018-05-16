@@ -136,7 +136,7 @@ methods (Access = public)
                         Vstart  = [];
                         Vpstart = [];
                         
-                    case 'B'
+                    case {'B','C'}
                         
                         % Generate dimensionless potential function f and
                         % compute potential values at starting points
@@ -166,34 +166,10 @@ methods (Access = public)
                         Vstart   = V0(ii);
                         Vpstart  = Vp0(ii);
                         
-                    case 'C'
-                        
-                        % Generate dimensionless potential function f and
-                        % compute potential values at starting points
-                        if mod(i_iter,p.n_recycle) == 1
-                            [ak,f{1:3}] = obj.gaussian_random_field_1D(p.kmax,p.gamma);
-                            V0   = Mv^4*f{1}(phi0/Mh);
-                            Vp0  = Mv^4*f{2}(phi0/Mh)/Mh;
-                            Vpp0 = Mv^4*f{3}(phi0/Mh)/Mh^2;
-                        end
-                        
-                        % Check if slow roll is valid at starting point
-                        ii = mod(i_iter-1,p.n_recycle)+1;
-                        if V0(ii) < 0
-                            data_out(2) = 1;
-                        elseif (Vp0(ii)/V0(ii)).^2/(16*pi/obj.m_Pl^2) > 1
-                            data_out(2) = 2;
-                        elseif abs(Vpp0(ii)/V0(ii))/(8*pi/obj.m_Pl^2) > 1
-                            data_out(2) = 3;
-                        else
-                            data_out(2) = 0;
-                        end
-                        
-                        phistart = phi0(ii);
-                        Vstart   = V0(ii);
-                        Vpstart  = Vp0(ii);
-                        
                 end
+                
+                % Abort if slow roll is invalid for Measure B
+                if strcmpi(p.measure,'B') && data_out(2) > 0, break, end
                 
                 if obj.plotFlag
                     if isempty(obj.plotHandle)
@@ -480,6 +456,7 @@ methods (Access = public)
                 data_out(14) = observables.n_t(1);
                 data_out(15) = observables.dlgrho(1);
                 data_out(16) = observables.lgOk(1);
+                data_out(17) = observables.rho_Lambda(1);
                 
             end % for goto
             
@@ -507,6 +484,7 @@ methods (Access = public)
             % 14 	n_t             (float,4)   3
             % 15 	dlgrho          (float,4)   3
             % 16 	lgOk            (float,4)   3
+            % 16 	rho_Lambda      (float,4)   3
             
             % Open output file for recording results
             % Record various amounts of data based on how far code ran
@@ -525,8 +503,8 @@ methods (Access = public)
                     fclose(fid);
                 case 3
                     fid = fopen(p.outfile,'at');
-                    fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
-                        [3 data_out(1:16)]);
+                    fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
+                        [3 data_out(1:17)]);
                     fclose(fid);
             end
             
@@ -1925,7 +1903,7 @@ methods (Static)
         
     end
     
-    function [datastruct] = read_output_file(outfile,record_flags)
+    function [datastruct] = read_output_file(outfile,record_flags,init_size)
         
         fid = fopen(outfile,'r');
         
@@ -1933,7 +1911,13 @@ methods (Static)
         
         meta_line = fgets(fid); is = 1;
         
-        [n_iter,~,~,is1] = sscanf(meta_line(is:end),'%E,',1); is = is+is1-1;
+        try
+            [n_iter,~,~,is1] = sscanf(meta_line(is:end),'%E,',1); is = is+is1-1;
+        catch me
+            datastruct = struct();
+            return
+        end
+        
         [mv_0,~,~,is1]   = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
         [mh,~,~,is1]     = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
         [m_Pl,~,~,is1]    = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
@@ -1951,7 +1935,9 @@ methods (Static)
         
         %% Read output from simulations
         
-        data = nan(round(abs(n_iter)/10),16);
+        if nargin < 3, init_size = round(abs(n_iter)/10); end
+        
+        data = nan(init_size,16);
         mbytes = 0;
         
         for i_ln = 1:abs(n_iter)
@@ -1981,7 +1967,7 @@ methods (Static)
                 case 2
                     data(i_ln,1:6)  = fscanf(fid,'%G,%d,%G,%G,%d,%G\r\n',5);
                 case 3
-                    data(i_ln,1:16) = fscanf(fid,'%G,%d,%G,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G\r\n',16);
+                    data(i_ln,1:17) = fscanf(fid,'%G,%d,%G,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G,%G\r\n',17);
             end
             
         end
@@ -2009,7 +1995,7 @@ methods (Static)
         
     end
     
-    function [datastruct] = read_output_file_old(outfile,record_flags)
+    function [datastruct] = read_output_file_old(outfile,record_flags,init_size)
         
         fid = fopen(outfile,'r');
         
@@ -2035,7 +2021,9 @@ methods (Static)
         
         %% Read output from simulations
         
-        data = nan(round(abs(n_iter)/10),16);
+        if nargin < 3, init_size = round(abs(n_iter)/10); end
+        
+        data = nan(init_size,16);
         mbytes = 0;
         
         for i_ln = 1:abs(n_iter)

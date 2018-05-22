@@ -3,8 +3,8 @@
 #SBATCH --job-name=etrnlinf
 #SBATCH --ntasks=1
 #SBATCH --mem-per-cpu=1000
-#SBATCH --time=12:00:00
-#SBATCH --output=../data/etrnlinf_%j.out
+#SBATCH --time=48:00:00
+#SBATCH --output=/hb/home/rngreenw/eternal_inflation/data/etrnlinf_%j.out
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=fail
 #SBATCH --mail-type=end
@@ -35,7 +35,7 @@ if [[ $range_flag -gt 0 ]]; then
   do
     printf -v id_str '%04d' $test_id
     
-    infile="../data/input/infile_"
+    infile="/hb/home/rngreenw/eternal_inflation/data/input/infile_"
     infile+=$id_str
     infile+=".txt"
     
@@ -47,11 +47,11 @@ if [[ $range_flag -gt 0 ]]; then
     outfile_t+=$id_str
     outfile_t+=".txt"
     
-    outdir="../data/out_"
+    outdir="/hb/home/rngreenw/eternal_inflation/data/out_"
     outdir+=$id_str
     outdir+="/"
     
-    cmd="eternal_sim_leader("
+    cmd="cd('/hb/home/rngreenw/eternal_inflation/code');eternal_sim_leader("
     cmd+=$cores
     cmd+=",'"
     cmd+=$infile
@@ -61,17 +61,17 @@ if [[ $range_flag -gt 0 ]]; then
     cmd+=$outdir
     cmd+="');exit"
     
-    mkdir -p ../data/out_$id_str
-    srun sh /hb/software/apps/matlab/bin/matlab -nodisplay -nodesktop -r $cmd
-    python eternal_sim_cleanup.py --cores $cores --output_dir $outdir --output_file $outfile
-    python eternal_sim_truncate.py --cores $cores --output_dir $outdir --output_file $outfile_t
+    mkdir -p /hb/home/rngreenw/eternal_inflation/data/out_$id_str
+    srun sh /hb/software/apps/matlab/2017b/bin/matlab -nodisplay -nodesktop -r $cmd
+    python /hb/home/rngreenw/eternal_inflation/code/eternal_sim_cleanup.py --cores $cores --output_dir $outdir --output_file $outfile
+    python /hb/home/rngreenw/eternal_inflation/code/eternal_sim_truncate.py --cores $cores --output_dir $outdir --output_file $outfile_t
   done
 
 else
 
   for test_id in "$@"
   do
-    infile="../data/input/infile_"
+    infile="/hb/home/rngreenw/eternal_inflation/data/input/infile_"
     infile+=$test_id
     infile+=".txt"
     
@@ -83,11 +83,11 @@ else
     outfile_t+=$id_str
     outfile_t+=".txt"
     
-    outdir="../data/out_"
+    outdir="/hb/home/rngreenw/eternal_inflation/data/out_"
     outdir+=$test_id
     outdir+="/"
     
-    cmd="eternal_sim_leader("
+    cmd="cd('/hb/home/rngreenw/eternal_inflation/code');eternal_sim_leader("
     cmd+=$cores
     cmd+=",'"
     cmd+=$infile
@@ -97,10 +97,10 @@ else
     cmd+=$outdir
     cmd+="');exit"
     
-    mkdir -p ../data/out_$test_id
-    srun sh /hb/software/apps/matlab/bin/matlab -r $cmd
-    python eternal_sim_cleanup.py --cores $cores --output_dir $outdir --output_file $outfile
-    python eternal_sim_truncate.py --cores $cores --output_dir $outdir --output_file $outfile_t
+    mkdir -p /hb/home/rngreenw/eternal_inflation/data/out_$test_id
+    srun sh /hb/software/apps/matlab/2017b/bin/matlab -r $cmd
+    python /hb/home/rngreenw/eternal_inflation/code/eternal_sim_cleanup.py --cores $cores --output_dir $outdir --output_file $outfile
+    python /hb/home/rngreenw/eternal_inflation/code/eternal_sim_truncate.py --cores $cores --output_dir $outdir --output_file $outfile_t
   done
 
 fi

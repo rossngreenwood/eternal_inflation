@@ -6,7 +6,7 @@ function eis_wrapper(...
         kmax,               ...   % Largest wavenumber for GRF
         gamma,              ...   % Frequency dependence of GRF
         measure,            ...   % Measure on initial conditions
-        n_tunnel_max,        ...  % Max number of tunneling events to simulate
+        n_tunnel_max,       ...   % Max number of tunneling events to simulate
         lambdascreen,       ...   % Throw out cases where rho_Lambda < 0?
         rho_Lambda_thres,   ...   % Condition on rho_Lambda ~= 0?
         fixQ,               ...   % Condition on Q ~= 10^{-5}?
@@ -58,7 +58,7 @@ function eis_wrapper(...
         'outfile',            outfile,...
         'n_recycle',          n_recycle );
     
-    eis.simulate()
+    eis.main()
     
 end
     

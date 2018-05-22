@@ -26,9 +26,6 @@ properties
         'outfile',            ''...     % Path to output text file
         );
     
-    plotFlag = 0;
-    plotHandle = [];
-    
 end
 
 properties (Constant)
@@ -80,7 +77,6 @@ methods (Access = public)
         end
         
         i_iter = 0;
-        tic
         
         % Run n_iter iterations of the inflation simulation
         while true
@@ -91,9 +87,9 @@ methods (Access = public)
             
             data_out = nan(1,17); % Initialize output array
             
-            if (p.n_iter > 0 && mod(i_iter,1e4) == 0) || ...
+            if (p.n_iter > 0 && mod(i_iter,1e5) == 0) || ...
                (p.n_iter < 0 && mod(i_iter,1e1) == 0)
-                disp(num2str([i_iter toc]));
+                disp(num2str(i_iter));
             end
             
             for goto = NaN % on break, goto record data
@@ -159,9 +155,6 @@ methods (Access = public)
                             data_out(2) = 0;
                         end
                         
-                        % Abort if slow roll is invalid
-                        if data_out(2) > 0, break, end
-                        
                         phistart = phi0(ii);
                         Vstart   = V0(ii);
                         Vpstart  = Vp0(ii);
@@ -171,20 +164,9 @@ methods (Access = public)
                 % Abort if slow roll is invalid for Measure B
                 if strcmpi(p.measure,'B') && data_out(2) > 0, break, end
                 
-                if obj.plotFlag
-                    if isempty(obj.plotHandle)
-                        obj.plotHandle = figure;
-                    else
-                        figure(obj.plotHandle)
-                    end
-                    x = linspace(-20,10,1001);
-                    plot(x,f{1}(x)); hold on; plot(phi0/Mh,f{1}(phi0/Mh),'o'); hold off
-                    pause(1)
-                end
-                
                 %% Screen the potential
                 
-                rho_Lambda  = 0;
+                rho_offset = 0; % Amount by which to shift the potential
                 
                 % Find the first local minimum
                 % Shift the potential up by rho_Lambda_thres so that
@@ -195,7 +177,6 @@ methods (Access = public)
                     1, ... % phiscale
                     p.lambdascreenmode );
                 
-                near_minima = {};
                 if p.rho_Lambda_thres > 0
                     
                     % Check if there is a minimum close to rho_Lambda_thres
@@ -210,99 +191,78 @@ methods (Access = public)
                     if abs(fstop) < p.rho_Lambda_thres^4/p.mv^4
                         % Vacuum energy is already close to a possible
                         % value for lambda in the starting basin
-                        rho_Lambda = fstop*Mv^4;
+                        rho_offset = fstop*Mv^4;
                     else
                         
                         % Check if a neighboring vacuum is close to the
-                        % observed value for lambda
+                        % observed value for Lambda
                         
-                        near_minima = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)};
-                        phipeak     = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)};
-                        phifv       = {xstop,xstop};
+                        phitv   = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)};
+                        phipeak = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)};
+                        phifv   = repmat({[xstop nan(1,p.n_tunnel_max-1)]},1,2);
                         
-                        found = false;
+                        rho_offset = nan(1,2);
+                        rho_basin    = nan(1,2);
                         
-                        % Randomize which direction is checked first
-                        if randi(2) == 1
-                            lr_order = [1 2];
-                        else
-                            lr_order = [2 1];
-                        end
-                        
-                        rho_Lambda = zeros(1,2);
-                        i_basin    = zeros(1,2);
-                        
-                        for lr = lr_order
+                        for lr = 1:2
                             for i_tunnel = 1:p.n_tunnel_max
-                                [near_minima{lr}(i_tunnel),phipeak{lr}(i_tunnel)] = find_phinextmin(...
+                                [phitv{lr}(i_tunnel),phipeak{lr}(i_tunnel)] = find_phinextmin(...
                                     phifv{lr}(i_tunnel),ak,1,0,1,1,2*(lr-1)-1,1);
                                 if ...
-                                        isnan(near_minima{lr}(i_tunnel)) || ...
-                                        f{1}(near_minima{lr}(i_tunnel)) < 0 || ...
-                                        diff(f{1}([near_minima{lr}(i_tunnel),phifv{lr}(i_tunnel)])) < 0
+                                        isnan(phitv{lr}(i_tunnel)) || ...
+                                        f{1}(phitv{lr}(i_tunnel)) < 0 || ...
+                                        diff(f{1}([phitv{lr}(i_tunnel),phifv{lr}(i_tunnel)])) < 0
                                     break
-                                elseif abs(f{1}(near_minima{lr}(i_tunnel))) < p.rho_Lambda_thres^4/p.mv^4
-                                    rho_Lambda(lr) = f{1}(near_minima{lr}(i_tunnel))*Mv^4;
-                                    i_basin(lr) = i_tunnel;
-                                    found = true;    % Don't keep looking
+                                elseif abs(f{1}(phitv{lr}(i_tunnel))) < p.rho_Lambda_thres^4/p.mv^4
+                                    rho_offset(lr) = f{1}(phitv{lr}(i_tunnel))*Mv^4;
+                                    rho_basin(lr)  = i_tunnel;
                                     break
                                 elseif i_tunnel < p.n_tunnel_max
-                                    phifv{lr}(i_tunnel+1) = near_minima{lr}(i_tunnel);
+                                    phifv{lr}(i_tunnel+1) = phitv{lr}(i_tunnel);
                                 end
                             end
                         end
                         
-                        if found
-                            if i_basin(1) == i_basin(2)
-                                [~,ia] = sort(abs(rho_Lambda));
+                        if any(~isnan(rho_offset))
+                            % Choose the offset that zeros out the closest
+                            % basin or that involves the smallest shift
+                            if rho_basin(1) == rho_basin(2)
+                                [~,ia] = sort(abs(rho_offset));
                             else
-                                [~,ia] = sort(i_basin);
+                                [~,ia] = sort(rho_basin); % Always chooses non-NaN
                             end
-                            rho_Lambda = rho_Lambda(ia(1));
+                            rho_offset = rho_offset(ia(1));
                         else
                             break % Skip to record data
                         end
                         
                     end
                     
-                    if obj.plotFlag
-                        if isempty(obj.plotHandle)
-                            obj.plotHandle = figure;
-                        else
-                            figure(obj.plotHandle)
-                        end
-                        x = linspace(-8,8,1001)+real(phistart)/Mh;
-                        plot(x,f{1}(x)); hold on; 
-                        plot(real(phistart)/Mh,f{1}(real(phistart)/Mh),'o','LineWidth',1); 
-                        plot(xstop,f{1}(xstop),'x','LineWidth',1); 
-                        if ~isempty(near_minima) && ~all(isnan([near_minima{:}]))
-                            plot([phipeak{:}],f{1}([phipeak{:}]),'^');
-                            plot([near_minima{:}],f{1}([near_minima{:}]),'v','LineWidth',1);
-                            pause(5)
-                        end
-                        hold off
-                    end
-                    
                 elseif p.lambdascreenmode
                     
-                    if isnan(xstop)
-                        % Vacuum energy is negative; abort
+                    if isnan(xstop) || f{1}(xstop)*Mv^4 < 0
+                        % Vacuum energy is negative
                         data_out(2) = 5;
-                        break
+                        break % Skip to record data
                     end
                     
                 end
                 
-                data_out(4) = rho_Lambda(1)/obj.m_Pl^4; % Save dimensionless value
+                data_out(4) = rho_offset(1)/obj.m_Pl^4; % Save dimensionless value
+                
                 %% Simulate inflation with tunneling events
                 
                 record_flag = 1;
                 
-                Vstop       = [];
-                valid_basin = [];
-                
-                phi = nan(1,5);
                 data_out(5) = false;
+                
+                Vstop = [];
+                
+                phi    = nan(1+p.n_tunnel_max,5);
+                status = nan(1+p.n_tunnel_max,1);
+                Ntotal = nan(1+p.n_tunnel_max,1);
+                
+                valid_basin = false(1+p.n_tunnel_max,1);
                 
                 goto_break = false;
                 for i_tunnel = 0:p.n_tunnel_max
@@ -311,12 +271,12 @@ methods (Access = public)
                     
                     if i_tunnel > 0
                         
-                        if isempty(Vstop), Vstop = V(phi(end)); end
+                        phifv = phi(i_tunnel,5);
                         
                         % Look for an instanton tunneling solution
                         [phitunnel,log_tunnel_rate,flag_hawking_moss,flag_fv_eternal] = ...
-                            obj.check_false_vacuum_eternal(...
-                            ak,f,phi,V,Vp,Vpp,rho_Lambda,p.n_tunnel_max+1-i_tunnel,Vstop,p.flag_screen_basin);
+                            obj.check_false_vacuum_eternal(ak,phifv,V,Vp,Vpp,...
+                            rho_offset,p.n_tunnel_max+1-i_tunnel,Vstop,p.flag_screen_basin);
                         
                         if isnan(phitunnel) % No tunneling
                             if data_out(2) == 4 % No end of inflation
@@ -333,7 +293,7 @@ methods (Access = public)
                         data_out(6) = min(data_out(6),log_tunnel_rate);
                         
                         if flag_hawking_moss
-                            if phitunnel < phi(end)
+                            if phitunnel < phifv
                                 % Start just to the left (-) of the maximum
                                 phistart = phitunnel - 1i;
                             else
@@ -344,70 +304,53 @@ methods (Access = public)
                             phistart = phitunnel;
                         end
                         
+                        Vstart  = [];
+                        Vpstart = [];
+                        
                     end
                     
                     %% Simulate slowroll
                     % If tunneling occurs, simulate slow roll from the new
                     % starting point on other side of potential barrier
                     
-                    it = 1 + i_tunnel;
-                    [phi(it,:),status_sr(it,1),mv_sr(it,1),Ntotal(it,1),V,Vp,Vpp] = ...
-                        obj.simulate_slowroll(f,phistart,rho_Lambda,Vstart,Vpstart);
+                    it = 1 + i_tunnel; % {1,2,...,1+p.n_tunnel_max}
+                    [phi(it,:),status(it,1),~,Ntotal(it,1),V,Vp,Vpp] = ...
+                        obj.simulate_slowroll(f,phistart,rho_offset,Vstart,Vpstart);
                     
                     % Set phi(5) = phistop
                     if i_tunnel == 0
-                        phi(it,5) = xstop*Mh;
+                        phi(it,5) = xstop*Mh; % Found above
                     else
                         [new_xstop] = find_phistop(real(phistart)/Mh,ak,...
-                            1, ... % Vscale
-                            rho_Lambda/Mv^4, ... % rho_Lambda
-                            1, ... % phiscale
-                            0 );   % lambdascreenmode
+                            1,rho_offset/Mv^4,1,0);
                         phi(it,5) = new_xstop*Mh;
                     end
                     
                     if V(phi(it,5)) <= 0
-                        valid_basin(it) = false; %#ok<AGROW>
+                        % Vacuum energy is negative
                         break
-                    end
-                    
-                    if ~isnan(phi(it,4)) && ~(Ntotal(it) < p.Nafter)
+                    elseif ~isnan(phi(it,4)) && ~(Ntotal(it) < p.Nafter)
                         valid_basin(1:it) = true;
-                    else
-                        valid_basin(it) = false; %#ok<AGROW>
                     end
                     
                 end
                 
-                % Tunneling index of last valid basin
-                i_last = find(valid_basin,1,'last');
-                if isempty(i_last), i_last = length(mv_sr); end
+                data_out(1) = p.mv;
                 
-                data_out(1) = mv_sr(i_last);
-                data_out(2) = status_sr(i_last);
-                data_out(3) = Ntotal(i_last);
+                if ~any(valid_basin)
+                    break
+                else
+                    % Tunneling index of last valid basin
+                    i_last = find(valid_basin,1,'last');
+                    data_out(2) = status(i_last);
+                    data_out(3) = Ntotal(i_last);
+                    phi = phi(1:i_last,:);
+                end
                 
                 if goto_break
                     break % No end of inflation
-                elseif ~(data_out(3) >= p.Nafter)
+                elseif ~(data_out(3) > p.Nafter)
                     break % Not enough e-foldings
-                end
-                
-                if obj.plotFlag
-                    if isempty(obj.plotHandle)
-                        obj.plotHandle = figure;
-                    else
-                        figure(obj.plotHandle)
-                    end
-                    x = linspace(-4*Mh,4*Mh,1001)+phi(i_tunnel+1,2);
-                    plot(x,V(x)); hold on;
-                    plot(phi(i_tunnel+1,1),V(phi(i_tunnel+1,1)),'^','LineWidth',1);
-                    plot(phi(i_tunnel+1,2),V(phi(i_tunnel+1,2)),'o','LineWidth',1);
-                    plot(phi(i_tunnel+1,3),V(phi(i_tunnel+1,3)),'p','LineWidth',1);
-                    plot(phi(i_tunnel+1,4),V(phi(i_tunnel+1,4)),'*','LineWidth',1);
-                    plot(phi(i_tunnel+1,5),V(phi(i_tunnel+1,5)),'x','LineWidth',1);
-                    hold off
-                    pause(3)
                 end
                 
                 %% Check for stochastic and topological eternal inflation
@@ -423,15 +366,13 @@ methods (Access = public)
                     
                     % Set phi(1) = phipeak
                     if isreal(phistart)
-                        phi(it,1) = find_phipeak(phi(it,2)/Mh,ak,1,rho_Lambda/Mv^4,1)*Mh;
+                        phi(it,1) = find_phipeak(phi(it,2)/Mh,ak,1,rho_offset/Mv^4,1)*Mh;
                     else
                         phi(it,1) = phi(it,2);
                     end
                     
-                    [numStochEpochs,NSinceStoch] = obj.check_stochastic_eternal(...
-                        V,Vp,Vpp,phi(it,:));
-                    flag_topological_eternal = obj.check_topological_eternal(...
-                        V,Vp,Vpp,phistart,phi(it,1));
+                    [numStochEpochs,NSinceStoch] = obj.check_stochastic_eternal(V,Vp,Vpp,phi(it,:));
+                    flag_topological_eternal = obj.check_topological_eternal(V,Vp,Vpp,phistart,phi(it,1));
                     
                     data_out(7) = max(0,data_out(7)) + max(0,numStochEpochs);
                     data_out(8) = NSinceStoch; % Only keep the value from the last basin
@@ -449,64 +390,20 @@ methods (Access = public)
                 Nbefore = Ntotal - p.Nafter; % e-folds before horizon crossing
                 observables = obj.compute_observables(V,Vp,Vpp,Vppp,phi(end,:),Nbefore,obj.m_Pl);
                 
-                data_out(10)  = observables.Q(1);
+                data_out(10) = observables.Q(1);
                 data_out(11) = observables.r(1);
                 data_out(12) = observables.n_s(1);
                 data_out(13) = observables.alpha(1);
                 data_out(14) = observables.n_t(1);
                 data_out(15) = observables.dlgrho(1);
                 data_out(16) = observables.lgOk(1);
-                data_out(17) = observables.rho_Lambda(1);
+                data_out(17) = observables.rho_Lambda(1)/obj.m_Pl^4;
                 
             end % for goto
             
             %% Record results
             
-            % Record Flags
-            % 1     Potential is valid; simulated slow roll
-            % 2     Checked for false vacuum tunneling
-            % 3     Found a valid basin with sufficient N_e
-            
-            % Idx   	Output          Type        Record Flag
-            % 1     	mv              (float,4)   1,2,3
-            % 2  	status          (int)       1,2,3
-            % 3     	Ntotal          (float,2)   1,2,3
-            % 4		rho_Lambda      (float,4)   3
-            % 5  	flag_fv_eternal (bool)      2,3
-            % 6  	log_tunnel_rate (float,4)   2,3
-            % 7  	numStochEpochs  (int)       3
-            % 8  	NSinceStoch     (float,2)   3
-            % 9  	numTopolEpochs  (int)       3
-            % 10  	Q               (float,4)   3
-            % 11 	r               (float,4)   3
-            % 12 	n_s             (float,4)   3
-            % 13 	alpha           (float,4)   3
-            % 14 	n_t             (float,4)   3
-            % 15 	dlgrho          (float,4)   3
-            % 16 	lgOk            (float,4)   3
-            % 16 	rho_Lambda      (float,4)   3
-            
-            % Open output file for recording results
-            % Record various amounts of data based on how far code ran
-            
-            %    disp(['rho_Lambda = ' num2str(rho_Lambda)]);
-            switch record_flag
-                case 1
-                    fid = fopen(p.outfile,'at');
-                    fprintf(fid,'%d,%.4G,%d,%.2G,%.4G\r\n',...
-                        [1 data_out(1:4)]);
-                    fclose(fid);
-                case 2
-                    fid = fopen(p.outfile,'at');
-                    fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G\r\n',...
-                        [2 data_out(1:6)]);
-                    fclose(fid);
-                case 3
-                    fid = fopen(p.outfile,'at');
-                    fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
-                        [3 data_out(1:17)]);
-                    fclose(fid);
-            end
+            obj.write_output(record_flag,p.outfile,data_out);
             
         end % for i_iter
         
@@ -529,8 +426,6 @@ methods (Access = protected)
         %   datastruct  A structure containing observables and diagnostics
         
         if nargin < 4, rho_Lambda = 0;  end
-        if nargin < 5 || isempty(Vstart),  Vstart = [];     end
-        if nargin < 6 || isempty(Vpstart), Vpstart = [];    end
         
         % If starting at a peak of the potential, 
         % the direction in which the inflaton will evolve
@@ -551,8 +446,10 @@ methods (Access = protected)
         V = @(x) V0(x) - rho_Lambda;
         Vp = []; Vpp = [];
         
-        if nargin < 5, Vstart = V(phistart); end
-        if nargin < 6
+        if nargin < 5 || isempty(Vstart)
+            Vstart = V(phistart);
+        end
+        if nargin < 6 || isempty(Vpstart)
             Vp = build_potential(f,mv*obj.m_Pl,mh*obj.m_Pl,1);
             Vpstart = Vp(phistart);
         end
@@ -611,13 +508,13 @@ end
 
 methods (Access = protected)
     
-    function [phitunnel,log_tunnel_rate,flag_hawking_moss,flag_fv_eternal] = check_false_vacuum_eternal(obj,ak,f,...
-            phi,V,Vp,Vpp,rho_Lambda,n_tunnel_remaining,Vstop,flag_screen_basin)
+    function [phitunnel,log_tunnel_rate,flag_hawking_moss,flag_fv_eternal] = check_false_vacuum_eternal(...
+            obj,ak,phifv,V,Vp,Vpp,rho_offset,n_tunnel_remaining,Vstop,flag_screen_basin)
         % Handle false vacuum tunneling.
         
-        if nargin < 7 || isempty(rho_Lambda), rho_Lambda = 0; end
-        if nargin < 8, n_tunnel_remaining = 1; end
-        if nargin < 9, Vstop = V(phi(5)); end
+        if nargin < 7 || isempty(rho_offset), rho_offset = 0; end
+        if nargin < 8 || isempty(n_tunnel_remaining), n_tunnel_remaining = 1; end
+        if nargin < 9 || isempty(Vstop), Vstop = V(phifv); end
         if nargin < 10, flag_screen_basin = true; end
         
         flag_rescale_potential = false;
@@ -636,7 +533,7 @@ methods (Access = protected)
         
         %% Locate nearest minima
         
-        phistop = phi(5); % Location of false vacuum
+        phistop = phifv; % Location of false vacuum
         
         near_minima = {NaN,NaN};
         
@@ -665,7 +562,7 @@ methods (Access = protected)
                     lr_continue = true;
                     
                     [near_minima{lr}(i_tunnel),phipeak{lr}(i_tunnel)] = find_phinextmin(...
-                        phifv{lr}(i_tunnel),ak,mv^4*obj.m_Pl^4,rho_Lambda,phiscale,1,2*(lr-1)-1,1);
+                        phifv{lr}(i_tunnel),ak,mv^4*obj.m_Pl^4,rho_offset,phiscale,1,2*(lr-1)-1,1);
                     
                     if isnan(near_minima{lr}(i_tunnel)) || ...
                             V(near_minima{lr}(i_tunnel)) > Vfv{lr}(i_tunnel)
@@ -829,39 +726,40 @@ methods (Access = protected)
             phitol       = 1e-4;
             thinCutoff   = 1e-2;
             B_cutoff     = 1e4;
+            
             try
-            if flag_rescale_potential
-                
-                % Define potential with rescaled mv = 1
-                [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1,mh*obj.m_Pl);
-                f_Lambda = rho_Lambda/mv^4/obj.m_Pl^4;
-                V_rescale = @(x) V_rescale(x) - f_Lambda;
-                
-                % Initialize instanton solver
-                fvi = FalseVacuumInstanton(...
-                    'V',            V_rescale,...
-                    'dV',           Vp_rescale,...
-                    'd2V',          Vpp_rescale,...
-                    'm_Pl',         obj.m_Pl,...
-                    'phi_metaMin',  phistop,...
-                    'phi_absMin',   near_minima{lr}(1) );
-                
-            else
-                
-                % Initialize instanton solver
-                fvi = FalseVacuumInstanton(...
-                    'V',            V,...
-                    'dV',           Vp,...
-                    'd2V',          Vpp,...
-                    'm_Pl',         obj.m_Pl,...
-                    'phi_metaMin',  phistop,...
-                    'phi_absMin',   near_minima{lr}(1) );
-                
-            end
+                if flag_rescale_potential
+                    
+                    % Define potential with rescaled mv = 1
+                    [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1,mh*obj.m_Pl);
+                    f_offset = rho_offset/mv^4/obj.m_Pl^4;
+                    V_rescale = @(x) V_rescale(x) - f_offset;
+                    
+                    % Initialize instanton solver
+                    fvi = FalseVacuumInstanton(...
+                        'V',            V_rescale,...
+                        'dV',           Vp_rescale,...
+                        'd2V',          Vpp_rescale,...
+                        'm_Pl',         obj.m_Pl,...
+                        'phi_metaMin',  phistop,...
+                        'phi_absMin',   near_minima{lr}(1) );
+                    
+                else
+                    
+                    % Initialize instanton solver
+                    fvi = FalseVacuumInstanton(...
+                        'V',            V,...
+                        'dV',           Vp,...
+                        'd2V',          Vpp,...
+                        'm_Pl',         obj.m_Pl,...
+                        'phi_metaMin',  phistop,...
+                        'phi_absMin',   near_minima{lr}(1) );
+                    
+                end
             catch me
                 continue
             end
-
+            
             try % Solve for instanton profile
                 [R,Y,~] = fvi.find_profile([],xtol,phitol,thinCutoff);
             catch me
@@ -1844,65 +1742,6 @@ methods (Static)
         
     end
     
-end
-
-%% Utilities
-
-methods (Static)
-    
-    function [a,varargout] = gaussian_random_field_1D(n,gamma,a)
-        % [a,V,Vp,Vpp,...] = gaussian_random_field(k_max,gamma,coeffs)
-        %
-        % Inputs
-        %   n       Number of wavenumbers (integer)
-        %   gamma   A parameter that determines frequency dependence
-        %   a       If provided, then those coefficients are used to reproduce
-        %           a GRF generated by a previous call to this function
-        %
-        % Outputs
-        %   a               Fourier coefficients of GRF
-        %   {V,Vp,Vpp,...}  Gaussian random field and it's 1st, 2nd, ..., nth
-        %                   derivatives, respectively, in function form.
-        
-        % Generate new coefficients
-        % or use existing coefficients
-        if nargin < 3
-            if nargin < 1, n = 50;     end
-            if nargin < 2, gamma = 0;   end
-            k = (0:n).';
-            q = k/sqrt(n);
-            sigma = sqrt(q.^gamma .* exp(-q.^2/2));
-            sigma(1) = sigma(1) / sqrt(2);
-            a = randn(length(q),2) .* [sigma sigma];
-            a = a/norm(sigma([end:-1:2 1:end]))/sqrt(2);
-        else
-            k = (0:size(a,1)-1).';       % Wavenumber
-            q = k/sqrt(numel(k)-1);      % Reduced wavenumber
-        end
-        
-        % Assemble GRF and its derivatives
-        varargout = cell(1,nargout-1);
-        for nd = 0:nargout-2
-            aq = bsxfun(@times,a,q.^nd);
-            switch mod(nd,4)
-                case 0
-                    f = @(x) sum(bsxfun(@times,  cos(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times,  sin(q*x), aq(:,2) ),1);
-                case 1
-                    f = @(x) sum(bsxfun(@times, -sin(q*x), aq(:,1) ) + ...
-                             	 bsxfun(@times,  cos(q*x), aq(:,2) ),1);
-                case 2
-                    f = @(x) sum(bsxfun(@times, -cos(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times, -sin(q*x), aq(:,2) ),1);
-                case 3
-                    f = @(x) sum(bsxfun(@times,  sin(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times, -cos(q*x), aq(:,2) ),1);
-            end
-            varargout{nd+1} = f;
-        end
-        
-    end
-    
     function [datastruct] = read_output_file(outfile,record_flags,init_size)
         
         fid = fopen(outfile,'r');
@@ -1967,7 +1806,7 @@ methods (Static)
                 case 2
                     data(i_ln,1:6)  = fscanf(fid,'%G,%d,%G,%G,%d,%G\r\n',5);
                 case 3
-                    data(i_ln,1:17) = fscanf(fid,'%G,%d,%G,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G,%G\r\n',17);
+                    data(i_ln,1:16) = fscanf(fid,'%G,%d,%G,%G,%d,%G,%d,%G,%d,%G,%G,%G,%G,%G,%G,%G\r\n',16);
             end
             
         end
@@ -2213,6 +2052,114 @@ methods (Static)
             print(sprintf(save_fig,fieldname),'-dpng','-r0');
         end
 %         close(gcf)
+        
+    end
+    
+end
+
+%% Utilities
+
+methods (Static)
+    
+    function [a,varargout] = gaussian_random_field_1D(n,gamma,a)
+        % [a,V,Vp,Vpp,...] = gaussian_random_field(k_max,gamma,coeffs)
+        %
+        % Inputs
+        %   n       Number of wavenumbers (integer)
+        %   gamma   A parameter that determines frequency dependence
+        %   a       If provided, then those coefficients are used to reproduce
+        %           a GRF generated by a previous call to this function
+        %
+        % Outputs
+        %   a               Fourier coefficients of GRF
+        %   {V,Vp,Vpp,...}  Gaussian random field and it's 1st, 2nd, ..., nth
+        %                   derivatives, respectively, in function form.
+        
+        % Generate new coefficients
+        % or use existing coefficients
+        if nargin < 3
+            if nargin < 1, n = 50;     end
+            if nargin < 2, gamma = 0;   end
+            k = (0:n).';
+            q = k/sqrt(n);
+            sigma = sqrt(q.^gamma .* exp(-q.^2/2));
+            sigma(1) = sigma(1) / sqrt(2);
+            a = randn(length(q),2) .* [sigma sigma];
+            a = a/norm(sigma([end:-1:2 1:end]))/sqrt(2);
+        else
+            k = (0:size(a,1)-1).';       % Wavenumber
+            q = k/sqrt(numel(k)-1);      % Reduced wavenumber
+        end
+        
+        % Assemble GRF and its derivatives
+        varargout = cell(1,nargout-1);
+        for nd = 0:nargout-2
+            aq = bsxfun(@times,a,q.^nd);
+            switch mod(nd,4)
+                case 0
+                    f = @(x) sum(bsxfun(@times,  cos(q*x), aq(:,1) ) + ...
+                                 bsxfun(@times,  sin(q*x), aq(:,2) ),1);
+                case 1
+                    f = @(x) sum(bsxfun(@times, -sin(q*x), aq(:,1) ) + ...
+                             	 bsxfun(@times,  cos(q*x), aq(:,2) ),1);
+                case 2
+                    f = @(x) sum(bsxfun(@times, -cos(q*x), aq(:,1) ) + ...
+                                 bsxfun(@times, -sin(q*x), aq(:,2) ),1);
+                case 3
+                    f = @(x) sum(bsxfun(@times,  sin(q*x), aq(:,1) ) + ...
+                                 bsxfun(@times, -cos(q*x), aq(:,2) ),1);
+            end
+            varargout{nd+1} = f;
+        end
+        
+    end
+    
+    function write_output(record_flag,outfile,data_out)
+        
+        % Record Flags
+        % 1     Potential is valid; simulated slow roll
+        % 2     Checked for false vacuum tunneling
+        % 3     Found a valid basin with sufficient N_e
+        
+        % Idx   Output          Type        Record Flag
+        % 1     mv              (float,4)   1,2,3
+        % 2  	status          (int)       1,2,3
+        % 3     Ntotal          (float,2)   1,2,3
+        % 4		rho_offset      (float,4)   3
+        % 5  	flag_fv_eternal (bool)      2,3
+        % 6  	log_tunnel_rate (float,4)   2,3
+        % 7  	numStochEpochs  (int)       3
+        % 8  	NSinceStoch     (float,2)   3
+        % 9  	numTopolEpochs  (int)       3
+        % 10  	Q               (float,4)   3
+        % 11 	r               (float,4)   3
+        % 12 	n_s             (float,4)   3
+        % 13 	alpha           (float,4)   3
+        % 14 	n_t             (float,4)   3
+        % 15 	dlgrho          (float,4)   3
+        % 16 	lgOk            (float,4)   3
+        % 17 	rho_Lambda      (float,4)   3
+        
+        % Open output file for recording results
+        % Record various amounts of data based on how far code ran
+        
+        switch record_flag
+            case 1
+                fid = fopen(outfile,'at');
+                fprintf(fid,'%d,%.4G,%d,%.2G,%.4G\r\n',...
+                    [1 data_out(1:4)]);
+                fclose(fid);
+            case 2
+                fid = fopen(outfile,'at');
+                fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G\r\n',...
+                    [2 data_out(1:6)]);
+                fclose(fid);
+            case 3
+                fid = fopen(outfile,'at');
+                fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
+                    [3 data_out(1:17)]);
+                fclose(fid);
+        end
         
     end
     

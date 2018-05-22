@@ -1,19 +1,13 @@
 from __future__ import print_function
 
 import argparse
-import logging
 import os
-import shutil
 import sys
-import time
 
 def main():
-    """
-    This will try to run transgene from system arguments
-    """
+
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument('--cores', dest='cores', type=int, help='Number of cores to use.', required=True)
-    # parser.add_argument('--n_iter', dest='n_iter', type=int, help='Total number of iterations.', required=False, default=10)
     parser.add_argument('--output_file', dest='output_file', type=str, help='Output filename.', required=False, default='outfile.txt')
     parser.add_argument('--output_dir', dest='output_dir', type=str, help='Output directory.', required=False, default='')
     params = parser.parse_args()
@@ -24,8 +18,12 @@ def main():
         for filename in worker_files:
             with open(params.output_dir + worker_files[filename]) as w_file:
                 header_line = w_file.readline()
-		if filename == 0:
-		    print(header_line, file=outfile, end='')
+        		if filename == 0:
+                    # Multiply the number of iterations for each worker by number of workers
+                    (n_iter,header_line) = header_line.split(',',1)
+                    n_iter = str(float(n_iter)*params.cores)[:-2]
+                    # Write header line only once
+        		    print(n_iter + ',' + header_line, file=outfile, end='')
                 for line in w_file:
                     print(line, file=outfile, end='')
 

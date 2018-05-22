@@ -337,11 +337,14 @@ methods (Access = public)
                 
                 data_out(1) = p.mv;
                 
-                if ~any(valid_basin)
+                i_last = find(valid_basin,1,'last');
+                if isempty(i_last)
+                    i_last = find(~isnan(status),1,'last');
+                end
+                if isempty(i_last)
                     break
                 else
                     % Tunneling index of last valid basin
-                    i_last = find(valid_basin,1,'last');
                     data_out(2) = status(i_last);
                     data_out(3) = Ntotal(i_last);
                     phi = phi(1:i_last,:);
@@ -716,7 +719,9 @@ methods (Access = protected)
                 
                 if lr_continue, continue, end
                 
-                disp('Computing instanton...');
+                if n_tunnel_remaining < obj.parameters.n_tunnel_max
+                    disp('Computing second instanton...');
+                end
                 
             end
             

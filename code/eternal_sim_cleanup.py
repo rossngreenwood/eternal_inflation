@@ -12,8 +12,15 @@ def main():
     parser.add_argument('--output_dir', dest='output_dir', type=str, help='Output directory.', required=False, default='')
     params = parser.parse_args()
 
-    # Now that all the processes have completed, we need to process the worker specific vcfs
     worker_files = {i: '.worker_%s.txt' % i for i in range(0, params.cores)}
+
+    worker_seeds = ""
+    for filename in worker_files:
+        with open(params.output_dir + worker_files[filename]) as w_file:
+            w_header = w_file.readline()
+            worker_seeds = worker_seeds + w_header.split(',')[-2] + ','
+    worker_seeds = worker_seeds[:-1] # Remove last comma
+
     with open(params.output_dir + params.output_file, 'w') as outfile:
         for filename in worker_files:
             with open(params.output_dir + worker_files[filename]) as w_file:
@@ -22,8 +29,9 @@ def main():
                     # Multiply the number of iterations for each worker by number of workers
                     (n_iter,header_line) = header_line.split(',',1)
                     n_iter = str(float(n_iter)*params.cores)[:-2]
-                    # Write header line only once
+                    # Write header line only once, followed by a line of seeds
         		    print(n_iter + ',' + header_line, file=outfile, end='')
+                    print(worker_seeds, file=outfile, end='')
                 for line in w_file:
                     print(line, file=outfile, end='')
 

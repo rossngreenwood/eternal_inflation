@@ -23,7 +23,8 @@ properties
         'n_tunnel_max',       1,...     % Max number of tunneling events to simulate
         'n_recycle',          4,...     % # of times to reuse same V(phi) with different phi0 value
         'rho_Lambda_thres',   0,...     % Threshold below which vacuum energy is considered "small"
-        'outfile',            ''...     % Path to output text file
+        'outfile',            '',...    % Path to output text file
+        'randstream',         []...
         );
     
 end
@@ -63,7 +64,11 @@ methods (Access = public)
         fclose(fid);
         
         % Seed the random number generator
-        if ~isnan(p.seed), rng(p.seed); end
+        if ~isempty(p.randstream)
+            RandStream.setGlobalStream(p.randstream);
+        end
+        
+        obj.parameters.seed = randi(1000);
         
         % Mass scales in natural units
         Mv = p.mv*obj.m_Pl;
@@ -198,7 +203,7 @@ methods (Access = public)
                         % observed value for Lambda
                         
                         phitv   = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)};
-                        phipeak = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)};
+                        phipeak = {nan(1,p.n_tunnel_max),nan(1,p.n_tunnel_max)}; % Not using this
                         phifv   = repmat({[xstop nan(1,p.n_tunnel_max-1)]},1,2);
                         
                         rho_offset = nan(1,2);
@@ -732,41 +737,22 @@ methods (Access = protected)
             thinCutoff   = 1e-2;
             B_cutoff     = 1e4;
             
-            try
-                if flag_rescale_potential
-                    
-                    % Define potential with rescaled mv = 1
-                    [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1,mh*obj.m_Pl);
-                    f_offset = rho_offset/mv^4/obj.m_Pl^4;
-                    V_rescale = @(x) V_rescale(x) - f_offset;
-                    
-                    % Initialize instanton solver
-                    fvi = FalseVacuumInstanton(...
-                        'V',            V_rescale,...
-                        'dV',           Vp_rescale,...
-                        'd2V',          Vpp_rescale,...
-                        'm_Pl',         obj.m_Pl,...
-                        'phi_metaMin',  phistop,...
-                        'phi_absMin',   near_minima{lr}(1) );
-                    
-                else
-                    
-                    % Initialize instanton solver
-                    fvi = FalseVacuumInstanton(...
-                        'V',            V,...
-                        'dV',           Vp,...
-                        'd2V',          Vpp,...
-                        'm_Pl',         obj.m_Pl,...
-                        'phi_metaMin',  phistop,...
-                        'phi_absMin',   near_minima{lr}(1) );
-                    
-                end
-            catch me
-                continue
-            end
+            % % Define potential with rescaled mv = 1
+            % [V_rescale,Vp_rescale,Vpp_rescale] = build_potential(f,1,mh*obj.m_Pl);
+            % f_offset = rho_offset/mv^4/obj.m_Pl^4;
+            % V_rescale = @(x) V_rescale(x) - f_offset;
             
+            % Initialize instanton solver
+            fvi = FalseVacuumInstanton(...
+                'V',            V,...
+                'dV',           Vp,...
+                'd2V',          Vpp,...
+                'm_Pl',         obj.m_Pl,...
+                'phi_metaMin',  phistop,...
+                'phi_absMin',   near_minima{lr}(1) );
+                
             try % Solve for instanton profile
-                [R,Y,~] = fvi.find_profile([],xtol,phitol,thinCutoff);
+                [R,Y] = fvi.find_profile([],xtol,phitol,thinCutoff);
             catch me
                 switch me.identifier
                     case 'FalseVacuumInstanton:StableFalseVacuum'
@@ -821,7 +807,7 @@ methods (Access = protected)
         
         %% Determine if inflation is eternal
         
-%         H4 = (kappa/3*V(phistop))^2;
+        % H4 = (kappa/3*V(phistop))^2;
         if log_tunnel_rate < log(9/4/pi);
             % Tunneling is slow enough for eternal inflation
             flag_fv_eternal = true;
@@ -2319,6 +2305,14 @@ methods
                     else
                         error('Output file name must be a string.');
                     end
+                    
+                case 'randstream'
+                    if isempty(val.randstream) || isa(val.randstream,'RandStream')
+                        obj.parameters.randstream = val.randstream;
+                    else
+                        error('randstream must be an object of class RandStream.');
+                    end
+                    
             end
         end
     end

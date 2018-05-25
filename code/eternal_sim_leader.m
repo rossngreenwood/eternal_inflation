@@ -28,6 +28,12 @@ function eternal_sim_leader(cores,input_file,output_file,output_dir)
     [seed,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
     [n_recycle,~,~,is1]         = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
     
+    if seed == -1
+        rs = RandStream.create('mrg32k3a','NumStreams',cores,'Seed','shuffle','CellOutput',true);
+    else
+        rs = RandStream.create('mrg32k3a','NumStreams',cores,'Seed',seed,'CellOutput',true);
+    end
+    
     %% Run code in parallel
     
     parpool(cores) % Open a parallel pool
@@ -49,8 +55,8 @@ function eternal_sim_leader(cores,input_file,output_file,output_dir)
             'rho_Lambda_thres', rho_Lambda_thres,...
             'fixQ',             logical(fixQ),...
             'Nafter',           Nafter,...
-            'seed',             randi(10000),...
-            'n_recycle',        n_recycle);
+            'n_recycle',        n_recycle,...
+            'randstream',       rs{labindex});
         
         eis.main();
         

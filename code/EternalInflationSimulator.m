@@ -24,8 +24,11 @@ properties
         'n_recycle',          4,...     % # of times to reuse same V(phi) with different phi0 value
         'rho_Lambda_thres',   0,...     % Threshold below which vacuum energy is considered "small"
         'outfile',            '',...    % Path to output text file
-        'randstream',         []...
+        'randstream',         [],...
+        'cores',              []
         );
+    
+    logfile
     
 end
 
@@ -55,20 +58,19 @@ methods (Access = public)
             p.flag_screen_basin = false;
         end
         
-        % Create output text file, write metadata header
-        fid = fopen(p.outfile,'wt');
-        disp(p.outfile);
-        fprintf(fid,'%E,%.4G,%.4G,%.4G,%d,%.2f,%s,%d,%d,%.4G,%d,%.3f,%d,%d\r\n',...
-            p.n_iter,p.mv,p.mh,obj.m_Pl,p.kmax,p.gamma,p.measure,p.n_tunnel_max,...
-            p.lambdascreenmode,p.rho_Lambda_thres,p.fixQ,p.Nafter,p.seed,p.n_recycle);
-        fclose(fid);
+        obj.logfile = [p.outfile(1:end-4) '_log.txt'];
         
         % Seed the random number generator
         if ~isempty(p.randstream)
             RandStream.setGlobalStream(p.randstream);
         end
         
-        obj.parameters.seed = randi(1000);
+        % Create output text file, write metadata header
+        fid = fopen(p.outfile,'wt');
+        fprintf(fid,'%E,%.4G,%.4G,%.4G,%d,%.2f,%s,%d,%d,%.4G,%d,%.3f,%d,%d\r\n',...
+            p.n_iter,p.cores,p.mv,p.mh,obj.m_Pl,p.kmax,p.gamma,p.measure,p.n_tunnel_max,...
+            p.lambdascreenmode,p.rho_Lambda_thres,p.fixQ,p.Nafter,p.seed,p.n_recycle);
+        fclose(fid);
         
         % Mass scales in natural units
         Mv = p.mv*obj.m_Pl;
@@ -90,7 +92,7 @@ methods (Access = public)
             if p.n_iter > 0, i_iter = i_iter + 1; end;
             if i_iter > abs(p.n_iter), break, end
             
-            data_out = nan(1,17); % Initialize output array
+            data_out = nan(1,19); % Initialize output array
             
             if (p.n_iter > 0 && mod(i_iter,1e5) == 0) || ...
                (p.n_iter < 0 && mod(i_iter,1e1) == 0)
@@ -207,7 +209,7 @@ methods (Access = public)
                         phifv   = repmat({[xstop nan(1,p.n_tunnel_max-1)]},1,2);
                         
                         rho_offset = nan(1,2);
-                        rho_basin    = nan(1,2);
+                        rho_basin  = nan(1,2);
                         
                         for lr = 1:2
                             for i_tunnel = 1:p.n_tunnel_max
@@ -296,6 +298,8 @@ methods (Access = public)
                         data_out(5) = data_out(5) || flag_fv_eternal;
                         % Record smallest tunneling rate
                         data_out(6) = min(data_out(6),log_tunnel_rate);
+                        data_out(18) = flag_hawking_moss;
+                        data_out(19) = V(phifv)/obj.m_Pl^4;
                         
                         if flag_hawking_moss
                             if phitunnel < phifv
@@ -423,7 +427,7 @@ end
 
 methods (Access = protected)
     
-    function [phi,status,mv,Ntotal,V,Vp,Vpp] = simulate_slowroll(obj,f,phistart,rho_Lambda,Vstart,Vpstart)
+    function [phi,status,mv,Ntotal,V,Vp,Vpp] = simulate_slowroll(obj,f,phistart,rho_offset,Vstart,Vpstart)
         % Simulate slow roll inflation and collect data
         %
         % Inputs
@@ -433,7 +437,7 @@ methods (Access = protected)
         % Outputs
         %   datastruct  A structure containing observables and diagnostics
         
-        if nargin < 4, rho_Lambda = 0;  end
+        if nargin < 4 || isempty(rho_offset), rho_offset = 0;  end
         
         % If starting at a peak of the potential, 
         % the direction in which the inflaton will evolve
@@ -451,7 +455,7 @@ methods (Access = protected)
         kappa = 8*pi/obj.m_Pl^2;
         
         V0 = build_potential(f,mv*obj.m_Pl,mh*obj.m_Pl);
-        V = @(x) V0(x) - rho_Lambda;
+        V = @(x) V0(x) - rho_offset;
         Vp = []; Vpp = [];
         
         if nargin < 5 || isempty(Vstart)
@@ -742,15 +746,34 @@ methods (Access = protected)
             % f_offset = rho_offset/mv^4/obj.m_Pl^4;
             % V_rescale = @(x) V_rescale(x) - f_offset;
             
-            % Initialize instanton solver
-            fvi = FalseVacuumInstanton(...
-                'V',            V,...
-                'dV',           Vp,...
-                'd2V',          Vpp,...
-                'm_Pl',         obj.m_Pl,...
-                'phi_metaMin',  phistop,...
-                'phi_absMin',   near_minima{lr}(1) );
+            try
+                % Initialize instanton solver
+                fvi = FalseVacuumInstanton(...
+                    'V',            V,...
+                    'dV',           Vp,...
+                    'd2V',          Vpp,...
+                    'm_Pl',         obj.m_Pl,...
+                    'phi_metaMin',  phistop,...
+                    'phi_absMin',   near_minima{lr}(1) );
+            catch me
                 
+                % Write potential coefs, phi_meatMin, phi_absMin to log
+                % file, later for debugging
+                disp(me.message);
+                fid = fopen(obj.logfile,'at');
+                fprintf(fid,'%s\r\n',me.identifier);
+                fprintf(fid,'n_tunnel_remaining: %d\r\n',n_tunnel_remaining);
+                fprintf(fid,'rho_offset: %.4G',rho_offset);
+                fprintf(fid,'phi_metaMin, phi_absMin: %.4G,%.4G; ak:\r\n',[phistop,near_minima{lr}(1));
+                for ii = 1:size(ak,1)
+                    fprintf(fid,'%.4f %.4f;\r\n',ak(ii,:));
+                end
+                fclose(fid);
+                
+                continue
+                
+            end
+            
             try % Solve for instanton profile
                 [R,Y] = fvi.find_profile([],xtol,phitol,thinCutoff);
             catch me
@@ -2137,18 +2160,18 @@ methods (Static)
         switch record_flag
             case 1
                 fid = fopen(outfile,'at');
-                fprintf(fid,'%d,%.4G,%d,%.2G,%.4G\r\n',...
-                    [1 data_out(1:4)]);
+                fprintf(fid,'%d,%d,%.3G,%.4G\r\n',...
+                    [1 data_out(2:4)]);
                 fclose(fid);
             case 2
                 fid = fopen(outfile,'at');
-                fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G\r\n',...
-                    [2 data_out(1:6)]);
+                fprintf(fid,'%d,%d,%.3G,%.4G,%d,%.4G,%d,%.4G\r\n',...
+                    [2 data_out([2:6 18 19])]);
                 fclose(fid);
             case 3
                 fid = fopen(outfile,'at');
-                fprintf(fid,'%d,%.4G,%d,%.2G,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
-                    [3 data_out(1:17)]);
+                fprintf(fid,'%d,%d,%.3G,%.4G,%d,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
+                    [3 data_out([2:6 18 19 7:17])]);
                 fclose(fid);
         end
         
@@ -2190,13 +2213,21 @@ methods
             switch fn{:}
                 
                 case 'n_iter'
-                    
                     if isnumeric(val.n_iter) && isscalar(val.n_iter) && ...
                             isfinite(val.n_iter) && val.n_iter ~= 0 && ...
                             mod(val.n_iter,1) == 0 && isreal(val.n_iter)
                         obj.parameters.(fn{:}) = val.(fn{:});
                     else
-                        error('parameters.n_iter must be a real, finite, positive integer.');
+                        error('parameters.n_iter must be a positive integer.');
+                    end
+                    
+                case 'cores'
+                    if isnumeric(val.cores) && isscalar(val.cores) && ...
+                            isfinite(val.cores) && val.cores ~= 0 && ...
+                            mod(val.cores,1) == 0 && isreal(val.cores)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.cores must be a positive integer.');
                     end
                     
                 case 'mv'
@@ -2205,7 +2236,7 @@ methods
                             isfinite(val.mv) && val.mv > 0 && isreal(val.mv)
                         obj.parameters.(fn{:}) = val.(fn{:});
                     else
-                        error('parameters.mv must be a real, finite, positive number.');
+                        error('parameters.mv must be a positive number.');
                     end
                     
                 case 'mh'
@@ -2214,7 +2245,7 @@ methods
                             isfinite(val.mh) && val.mh > 0 && isreal(val.mh)
                         obj.parameters.(fn{:}) = val.(fn{:});
                     else
-                        error('parameters.mh must be a real, finite, positive number.');
+                        error('parameters.mh must be a positive number.');
                     end
                     
                 case 'kmax'
@@ -2309,6 +2340,7 @@ methods
                 case 'randstream'
                     if isempty(val.randstream) || isa(val.randstream,'RandStream')
                         obj.parameters.randstream = val.randstream;
+                        obj.parameters.seed = val.randstream.Seed;
                     else
                         error('randstream must be an object of class RandStream.');
                     end

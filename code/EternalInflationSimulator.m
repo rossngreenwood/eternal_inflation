@@ -5,13 +5,11 @@ classdef EternalInflationSimulator < handle
 % Gaussian random field and initializes the inflaton field according to
 % some specified measure.
 
-%% Properties, constructor, and set/get methods
-
 properties
     
     parameters = struct(...
         'seed',               NaN,...   % Seed for random number generator (integer)
-        'n_iter',             1e2,...   % # of iterations
+        'n_iter',             1e2,...   % Number of iterations
         'mv',                 1e0,...   % Initial mass scale of the potential (multiple of m_Pl)
         'mh',                 1,...     % Mass scale of the inflaton field (multiple of m_Pl)
         'kmax',               30,...    % Largest wavenumber for GRF
@@ -24,23 +22,13 @@ properties
         'n_recycle',          4,...     % # of times to reuse same V(phi) with different phi0 value
         'rho_Lambda_thres',   0,...     % Threshold below which vacuum energy is considered "small"
         'outfile',            '',...    % Path to output text file
-        'randstream',         [],...
-        'cores',              []...
+        'randstream',         [],...    % Object defining random number generator
+        'cores',              1 ...     % Number of parallel cores on which this is running
         );
     
     logfile
     
 end
-
-properties (Constant)
-    
-    % Always hbar = c = 1
-    m_Pl = sqrt(8*pi); % Planck mass
-    M_Pl = 1;  % Reduced Planck mass
-    
-end
-
-%% Main method
 
 methods (Access = public)
     
@@ -265,12 +253,11 @@ methods (Access = public)
                 
                 Vstop = [];
                 
-                phi    = nan(1+p.n_tunnel_max,5);
+                phi    = nan(1+p.n_tunnel_max,6);
                 status = nan(1+p.n_tunnel_max,1);
                 Ntotal = nan(1+p.n_tunnel_max,1);
                 
-                valid_basin = false(1+p.n_tunnel_max,1);
-                
+                last_valid = nan;
                 goto_break = false;
                 for i_tunnel = 0:p.n_tunnel_max
                     
@@ -278,7 +265,7 @@ methods (Access = public)
                     
                     if i_tunnel > 0
                         
-                        phifv = phi(i_tunnel,5);
+                        phifv = phi(i_tunnel,6);
                         
                         % Look for an instanton tunneling solution
                         [phitunnel,log_tunnel_rate,flag_hawking_moss,flag_fv_eternal] = ...
@@ -328,66 +315,66 @@ methods (Access = public)
                     
                     % Set phi(5) = phistop
                     if i_tunnel == 0
-                        phi(it,5) = xstop*Mh; % Found above
+                        phi(it,6) = xstop*Mh; % Found above
                     else
                         [new_xstop] = find_phistop(real(phistart)/Mh,ak,...
                             1,rho_offset/Mv^4,1,0);
-                        phi(it,5) = new_xstop*Mh;
+                        phi(it,6) = new_xstop*Mh;
                     end
                     
-                    if V(phi(it,5)) <= 0
+                    if V(phi(it,6)) < 0
                         % Vacuum energy is negative
                         break
-                    elseif ~isnan(phi(it,4)) && ~(Ntotal(it) < p.Nafter)
-                        valid_basin(1:it) = true;
+                    elseif ~isnan(phi(it,5))
+                        % Inflation ends - OK
+                        last_valid = it;
                     end
                     
                 end
                 
-                data_out(1) = p.mv;
+                % Tunneling index of last basin
+                if isnan(last_valid)
+                    last_valid = find(isfinite(status),1,'last');
+                    if isempty(last_valid), break, end
+                end
                 
-                i_last = find(valid_basin,1,'last');
-                if isempty(i_last)
-                    i_last = find(~isnan(status),1,'last');
-                end
-                if isempty(i_last)
-                    break
-                else
-                    % Tunneling index of last valid basin
-                    data_out(2) = status(i_last);
-                    data_out(3) = Ntotal(i_last);
-                    phi = phi(1:i_last,:);
-                end
+                data_out(2) = status(last_valid);
+                data_out(3) = Ntotal(last_valid);
+                
+                phi    = phi(1:last_valid,:);
+                Ntotal = Ntotal(1:last_valid);
                 
                 if goto_break
                     break % No end of inflation
-                elseif ~(data_out(3) > p.Nafter)
+                elseif ~(Ntotal(last_valid) > p.Nafter)
                     break % Not enough e-foldings
                 end
-                
-                %% Check for stochastic and topological eternal inflation
                 
                 record_flag = 3;
                 
                 % Increment the counter only for successful inflation
                 if p.n_iter < 0, i_iter = i_iter + 1; end
                 
-                for i_tunnel = 0:size(phi,1)-1
-                    
-                    it = 1+i_tunnel;
-                    
-                    % Set phi(1) = phipeak
-                    if isreal(phistart)
-                        phi(it,1) = find_phipeak(phi(it,2)/Mh,ak,1,rho_offset/Mv^4,1)*Mh;
-                    else
-                        phi(it,1) = phi(it,2);
+                % Set phi(1) = phipeak
+                phi(:,1) = phi(:,2);
+                for i_tunnel = 0:size(phi,1)-1, it = 1+i_tunnel;
+                    if ~isreal(phi(it,2))
+                        phi(it,1) = find_phipeak(phi(it,2)/Mh,...
+                            ak,1,rho_offset/Mv^4,1)*Mh;
                     end
+                end
+                
+                %% Check for stochastic and topological eternal inflation
+                
+                for i_tunnel = 0:size(phi,1)-1, it = 1+i_tunnel;
                     
-                    [numStochEpochs,NSinceStoch] = obj.check_stochastic_eternal(V,Vp,Vpp,phi(it,:));
-                    flag_topological_eternal = obj.check_topological_eternal(V,Vp,Vpp,phistart,phi(it,1));
-                    
+                    % Stochastic eternal inflation
+                    [numStochEpochs,NSinceStoch] = obj.check_stochastic_eternal(V,Vp,phi(it,:));
                     data_out(7) = max(0,data_out(7)) + max(0,numStochEpochs);
                     data_out(8) = NSinceStoch; % Only keep the value from the last basin
+                    
+                    % Topological eternal inflation
+                    flag_topological_eternal = obj.check_topological_eternal(V,Vp,Vpp,phistart,phi(it,1));
                     data_out(9) = max(0,data_out(9)) + max(0,flag_topological_eternal);
                     
                 end
@@ -399,31 +386,29 @@ methods (Access = public)
                 [~,f{1:4}] = obj.gaussian_random_field_1D(p.kmax,p.gamma,ak);
                 Vppp = build_potential(f,p.mv*obj.m_Pl,p.mh*obj.m_Pl,3);
                 
-                Nbefore = Ntotal - p.Nafter; % e-folds before horizon crossing
+                Nbefore = Ntotal(end) - p.Nafter; % e-folds before horizon crossing
                 observables = obj.compute_observables(V,Vp,Vpp,Vppp,phi(end,:),Nbefore,obj.m_Pl);
                 
-                data_out(10) = observables.Q(1);
-                data_out(11) = observables.r(1);
-                data_out(12) = observables.n_s(1);
-                data_out(13) = observables.alpha(1);
-                data_out(14) = observables.n_t(1);
-                data_out(15) = observables.dlgrho(1);
-                data_out(16) = observables.lgOk(1);
-                data_out(17) = observables.rho_Lambda(1)/obj.m_Pl^4;
+                data_out(10) = observables.Q;
+                data_out(11) = observables.r;
+                data_out(12) = observables.n_s;
+                data_out(13) = observables.alpha;
+                data_out(14) = observables.n_t;
+                data_out(15) = observables.dlgrho;
+                data_out(16) = observables.lgOk;
+                data_out(17) = observables.rho_Lambda/obj.m_Pl^4;
                 
             end % for goto
             
             %% Record results
             
-%             obj.write_output(record_flag,p.outfile,data_out);
+            obj.write_output(record_flag,p.outfile,data_out);
             
         end % for i_iter
         
     end
     
 end
-
-%% Slowroll
 
 methods (Access = protected)
     
@@ -449,8 +434,9 @@ methods (Access = protected)
         
         Ntotal = nan;
         
-        phi = nan(1,5); % [phipeak, phistart, phiexit, phiend, phistop]
+        phi = nan(1,6); % [phipeak, phistart, phiexit, phiend, phistop]
         phi(2) = phistart;
+        phi(3) = phistart;
         
         kappa = 8*pi/obj.m_Pl^2;
         
@@ -466,59 +452,47 @@ methods (Access = protected)
             Vpstart = Vp(phistart);
         end
         
-        %% Simulate slow roll
+        [Vp,Vpp] = build_potential(f,mv*obj.m_Pl,mh*obj.m_Pl,[1 2]);
         
-        for shift_potential = 0:uint8(obj.parameters.fixQ)
-            
-            [Vp,Vpp] = build_potential(f,mv*obj.m_Pl,mh*obj.m_Pl,[1 2]);
-            
-            %% Identify phiend, phiexit, and phistop
-            
-            % Find the end of slow roll inflation
-            [phiend,status] = obj.find_phiend(phistart,V,Vp,Vpp,...
-                mh*obj.m_Pl,obj.m_Pl,Vstart,Vpstart);
-            if status == 4 % Slow roll valid until minimum; no phiend
-                phi(5) = phiend;
-                return
+        %% Identify phiend, phiexit, and phistop
+        
+        % Find the end of slow roll inflation
+        [phiend,status] = obj.find_phiend(phistart,V,Vp,Vpp,...
+            mh*obj.m_Pl,obj.m_Pl,Vstart,Vpstart);
+        if status == 4 % Slow roll valid until minimum; no phiend
+            phi(6) = phiend;
+            return
+        else
+            phi(5) = phiend;
+        end
+        
+        % Compute total number of slow roll e-folds
+        dlna_dphi = @(phi) (-kappa*V(phi)./Vp(phi));
+        if fall_direction ~= 0
+            Ntotal = Inf; % Started at a maximum
+        else
+            points = linspace(phistart,phiend,max(10,abs(phistart-phiend)/mv/obj.m_Pl*10));
+            Ntotal_trapz = trapz(points,dlna_dphi(points));
+            if  Ntotal_trapz > 0.7*obj.parameters.Nafter && ...
+                    Ntotal_trapz < 1.3*obj.parameters.Nafter
+                Ntotal = integral(dlna_dphi,phistart,phiend);
             else
-                phi(4) = phiend;
+                Ntotal = Ntotal_trapz;
             end
+        end
+        
+        % Find the value of the field 55 e-folds
+        % before the end of slow roll inflation
+        if Ntotal >= obj.parameters.Nafter
             
-            % Compute total number of slow roll e-folds
-            dlna_dphi = @(phi) (-kappa*V(phi)./Vp(phi));
-            if fall_direction ~= 0
-                Ntotal = Inf; % Started at a maximum
-            else
-                points = linspace(phistart,phiend,max(10,abs(phistart-phiend)/mv/obj.m_Pl*10));
-                Ntotal_trapz = trapz(points,dlna_dphi(points));
-                if  Ntotal_trapz > 0.7*obj.parameters.Nafter && ...
-                        Ntotal_trapz < 1.3*obj.parameters.Nafter
-                    Ntotal = integral(dlna_dphi,phistart,phiend);
-                else
-                    Ntotal = Ntotal_trapz;
-                end
-            end
-            
-            % Find the value of the field 55 e-folds
-            % before the end of slow roll inflation
-            if Ntotal >= obj.parameters.Nafter
-                
-                % Integrate back from (phiend,Nafter) to (phiexit,0)
-                dphi_dlna = @(N,phi) (-Vp(phi)./V(phi)/kappa).';
-                [~,phiexit] = ode23(dphi_dlna,[obj.parameters.Nafter 1 0],phiend);
-                phi(3) = phiexit(3);
-                
-            end
+            % Integrate back from (phiend,Nafter) to (phiexit,0)
+            dphi_dlna = @(N,phi) (-Vp(phi)./V(phi)/kappa).';
+            [~,phiexit] = ode23(dphi_dlna,[obj.parameters.Nafter 1 0],phiend);
+            phi(4) = phiexit(3);
             
         end
         
     end
-    
-end
-
-%% Checks for eternal inflation
-
-methods (Access = protected)
     
     function [phitunnel,log_tunnel_rate,flag_hawking_moss,flag_fv_eternal] = check_false_vacuum_eternal(...
             obj,ak,phifv,V,Vp,Vpp,rho_offset,n_tunnel_remaining,Vstop,flag_screen_basin)
@@ -837,24 +811,23 @@ methods (Access = protected)
         
     end
     
-    function [numStochEpochs,NSinceStoch] = check_stochastic_eternal(obj,V,Vp,~,phi)
+    function [numStochEpochs,NSinceStoch] = check_stochastic_eternal(obj,V,Vp,phi)
         
         p = obj.parameters;
         
-        numStochEpochs = nan;
-        NSinceStoch = nan;
-        
-        phipeak  = phi(1);
-        phistart = phi(2);
-        phiexit  = phi(3);
-        phiend   = phi(4);
-        
         kappa = 8*pi/obj.m_Pl^2;
-        hbar = 1;
+        hbar  = 1;
+        
+        numStochEpochs = nan; % Number of intervals of eternal inflation
+        NSinceStoch    = nan; % Number of e-foldings between SEI breakdown and exit scale
+        
+        phistart = phi(3);
+        phiexit  = phi(4);
+        phiend   = phi(5);
         
         phiscale = p.mh*obj.m_Pl;
         
-        %% find phistoch
+        %% Find intervals of stochastic eternal inflation
         
         Vstart  = V(phistart);
         Vpstart = Vp(phistart);
@@ -863,10 +836,8 @@ methods (Access = protected)
         phimin = phiscale^2 * abs(Vpstart./Vstart);
         dphi   = -0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));
         
-        % SEIC = Stochastic Eternal Inflation Criterion
-        
         phibreak = nan; % Field values where SEIC changes sign
-        off2on = nan; % True if SEIC goes from (+) to (-) moving downhill
+        off2on   = nan; % True if SEIC goes from (+) to (-) moving downhill
         phibreak_last = nan;
         
         % Positive if stochastic eternal
@@ -905,10 +876,14 @@ methods (Access = protected)
             ind = ind + 1;
         end
         
-        % Reached phiend without satisfying eternal inflation criterion
-        if isnan(phibreak(1)), return, end
+        if isnan(phibreak(1))
+            % Reached phiend without satisfying 
+            % eternal inflation criterion
+            return
+        end
         
-        % Find field values at breakdown precisely using binary search
+        %% Find field values at breakdown precisely using binary search
+        
         fun = @(x) (hbar^0.5*kappa*V(x)).^1.5 - 2*pi*sqrt(3)*(0.607)*abs(Vp(x));
         for i_break = 1:length(phibreak)
             
@@ -949,6 +924,8 @@ methods (Access = protected)
         
         end
         
+        %% Screen phistart and phiend
+        
         if off2on(1) == 0 % SEI is satisfied at phistart
             % Require that SEI ends when inflation ends, if not sooner
             phibreak = [phistart phibreak];
@@ -961,23 +938,27 @@ methods (Access = protected)
             off2on(end+1)   = 0;
         end
         
+        %% Check that at least one e-fold elapses with SEI valid
+        
         dlna_dphi = @(phi) -V(phi)./Vp(phi); % Integrate this to find N_e
         
-        % Check that at least one e-fold elapses with SEI valid
         for i = find(off2on,1)
             N = integral(@(x) dlna_dphi(x),phibreak(i),phibreak(i+1));
             if abs(N) < 1
                 % SEI epoch is too short; don't count it
                 phibreak(i:i+1) = [];
-                off2on(i:i+1) = [];
+                off2on(i:i+1)   = [];
             end
         end
         
-        if isempty(phibreak), return, end
+        if isempty(phibreak)
+            return
+        end
         
         numStochEpochs = nnz(~off2on);
         
-        % Compute # of e-folds after past SEI breakdown and before phiexit
+        %% Compute # of e-folds after past SEI breakdown and before phiexit
+        
         if isnan(phiexit)
             return % not applicable
         elseif (hbar^0.5*kappa*V(phiexit)).^1.5 - 2*pi*sqrt(3)*(0.607)*abs(Vp(phiexit)) > 0
@@ -989,68 +970,6 @@ methods (Access = protected)
             % Integrate e-foldings
             NSinceStoch = integral(@(x) dlna_dphi(x),phibreak_last(imin),phiexit);
         end
-        
-        return
-        
-        %% Stochastic Eternal inflation
-        
-% %         % Here \kappa = 1
-% %         stochasticEIC = @(x) (kappa*V(x)).^(3/2) > 2*pi*sqrt(3)*(0.607)*abs(Vp(x)); % stochasticEIC > 0 -> Eternal
-% %         
-% %         % Find the value of the field 55 e-folds
-% %         % before the end of slow roll inflation
-% %         
-% %         lna_steps = 0:floor(Ntotal);
-% %         if length(lna_steps) == 1, return, end
-% %         [~,phi_N] = ode45(dphi_dlna,lna_steps,phistart);                 % Phi values separated by 1 e-fold of inflation
-% %         phi_N = sort([phi_N; phiend; linspace(phistart,phimax,20).']).'; % Add search points between phistart and phimax
-% %         if phimax > phistart, phi_N = fliplr(phi_N); end                 % Order [phimax; ... phistart; ... phiend]
-% %         phi_N(isnan(phi_N)) = [];
-% %         
-% %         % Find where stochastic eternal inflation starts/ends
-% %         % Should always be eternal at phimax
-% %         intv_ind = find(diff(stochasticEIC(phi_N)));
-% %         off2on_sei   = feval(@(x) x(intv_ind) > 0, diff(stochasticEIC(phi_N)));
-% %         phibreak_sei = arrayfun(@(i) fzero(stochasticEIC,phi_N(i:i+1)),intv_ind);
-% %         
-% %         if isempty(phibreak_sei)
-% %             phibreak_sei = phimax;
-% %             off2on_sei = 0;
-% %         end
-        
-% %         % Second derivative check for stochastic eternal inflation near the
-% %         % maximum. Assume potential is locally mirror symmetric about maximum,
-% %         % or we condition on the field falling only toward phistart.
-% %         phidev = phimax-phibreak_sei(1); Hmax = sqrt(V(phimax)/3);
-% %         if abs(erf(abs(phidev/(Hmax/2/pi))/sqrt(2))) > exp(-3)
-% %             numStochEpochs = uint8(1 + nnz(off2on_sei));
-% %         else
-% %             stochasticEIC = @(x) stochasticEIC(x) & ...
-% %                 ~(min(phimax,phibreak_sei(1)) <= x && x <= max(phimax,phibreak_sei(1)));
-% %             phibreak_sei(1) = []; off2on_sei(1) = [];
-% %             numStochEpochs = uint8(nnz(off2on_sei));
-% %         end
-        
-% %         % Compute # of e-folds after past SEI breakdown and before phiexit
-% %         if stochasticEIC(phiexit)
-% %             NSinceStoch = 0; % Eternal at phiexit
-% %         elseif any((phibreak_sei(~off2on_sei)-phiexit)*Vp(phiexit) > 0)
-% %             phib = phibreak_sei((phibreak_sei-phiexit)*Vp(phiexit) > 0 & ~off2on_sei);
-% %             [~,imin] = min(abs(phib-phiexit));
-% %             NSinceStoch = integral(@(x) dlna_dphi(x).*slowroll(x),...
-% %                 phib(imin),phiexit);
-% %         else
-% %             NSinceStoch = NaN; % Never eternal before phiexit
-% %         end
-        
-        % Compute # of e-folds eternal after phistart and before phiend
-%         if strcmpi(p.measure,'a') && stochasticEIC(phistart)
-%             NStochastic = Inf;
-%         else
-%             NStochastic = nan;
-% %             datastruct.NStochastic = integral(@(x) ...
-% %                 dlna_dphi(x).*stochasticEIC(x).*slowroll(x),phistart,phiend);
-%         end
         
     end
     
@@ -1067,22 +986,23 @@ methods (Access = protected)
         
         % Determine whether quantum fluctuations could result in at least
         % one Hubble volume descending toward a different minimum of V(phi)
-        if isreal(phistart) % Not Measure A
+        if isreal(phistart) % Not starting at maximum
             H = sqrt(kappa/3*V(phistart));
             dphi = hbar^0.5*H/2/pi; % Amplitude of quantum fluctuation: P_\phi(k) = (dphi)^2 = \hbar * (H/2/\pi)^2
             Dphi = -Vp(phistart)/(3*H^2); % Classical field excursion
             if 1/2*erfc(abs(phistart+Dphi-phipeak)/(sqrt(2)*dphi)) < exp(-3)
-                % Not close enough to maximum
+                % Not close enough to maximum; assume no domain wall forms
                 return
             end
         end
         
-        % Assuming a domain wall forms around maximum, does it persist?
+        %% Assuming a domain wall forms around maximum, does it persist?
         
         % Find value of phi at the domain wall boundary 
         % where inflation breaks down
         [phiedge,status] = obj.find_phiend(phipeak,V,Vp,Vpp,p.mh*obj.m_Pl,obj.m_Pl,[],[],false,false);
         if status == 1
+            % Inflation ends when the potential goes negative
             flag_topological_eternal = false;
             return
         elseif status == 4
@@ -1091,12 +1011,14 @@ methods (Access = protected)
             return
         end
         
-        % Find value of phi that will descend to phiedge in time < t_H
+        % Find value of phi that will descend to phiedge in time <= t_H
         dphi_dlna = @(lna,phi) -Vp(phi)./V(phi)/kappa;
         [~,phiout] = ode23(dphi_dlna,[1,0.5,0],phiedge);
         phistar = phiout(3);
         
-        if isnan(phistar), return, end
+        if isnan(phistar)
+            return
+        end
         
         % If the expansion of the inner portion of the domain wall
         % where (phipeak < phi < phistar) replaces loss of the outer
@@ -1106,16 +1028,9 @@ methods (Access = protected)
             flag_topological_eternal = true;
         end
         
-% %         phiedge_eps = fzero(@(phi) Vp(phi)./V(phi)/2/kappa - 1,phipeak);
-% %         phiedge_eta = fzero(@(phi) abs(Vpp(phi)./V(phi)/kappa) - 1,phipeak);
-% %         [~,icloser] = min(abs(phipeak-[phiedge_eps,phiedge_eta]));
-% %         phiedge = feval(@(x) x(icloser),[phiedge_eps,phiedge_eta]);
-        
     end
     
 end
-
-%% Efficient search functions
 
 methods (Static)
     
@@ -1318,10 +1233,6 @@ methods (Static)
         
     end
     
-end
-
-methods (Static)
-    
     function [status] = compute_status(V,Vp,Vpp,phi,m_Pl)
         if V(phi) < 0
             status = 1;
@@ -1345,7 +1256,7 @@ methods (Static)
         % Outputs
         %   observables Structure of observables
         
-        phiexit  = phi(3);
+        phiexit = phi(4);
         V_exit = V(phiexit);
         
         kappa = 8*pi/m_Pl^2;
@@ -1360,15 +1271,298 @@ methods (Static)
         observables.n_s         = 1-6*eps+2*eta;
         observables.alpha       = 16*eps*eta - 24*eps^2 - 2*xi2;
         observables.n_t         = -2*eps;
-        observables.dlgrho      = log10(V_exit/V(phi(4)));
-        observables.lgOk        = log10(V(phi(2))/V_exit) - Nbefore*2/log(10);
-        observables.rho_Lambda  = V(phi(5));
+        observables.dlgrho      = log10(V_exit/V(phi(5)));
+        observables.lgOk        = log10(V(phi(3))/V_exit) - Nbefore*2/log(10);
+        observables.rho_Lambda  = V(phi(6));
+        
+    end
+    
+    function [a,varargout] = gaussian_random_field_1D(n,gamma,a)
+        % [a,V,Vp,Vpp,...] = gaussian_random_field(k_max,gamma,coeffs)
+        %
+        % Inputs
+        %   n       Number of wavenumbers (integer)
+        %   gamma   A parameter that determines frequency dependence
+        %   a       If provided, then those coefficients are used to reproduce
+        %           a GRF generated by a previous call to this function
+        %
+        % Outputs
+        %   a               Fourier coefficients of GRF
+        %   {V,Vp,Vpp,...}  Gaussian random field and it's 1st, 2nd, ..., nth
+        %                   derivatives, respectively, in function form.
+        
+        % Generate new coefficients
+        % or use existing coefficients
+        if nargin < 3
+            if nargin < 1, n = 50;     end
+            if nargin < 2, gamma = 0;   end
+            k = (0:n).';
+            q = k/sqrt(n);
+            sigma = sqrt(q.^gamma .* exp(-q.^2/2));
+            sigma(1) = sigma(1) / sqrt(2);
+            a = randn(length(q),2) .* [sigma sigma];
+            a = a/norm(sigma([end:-1:2 1:end]))/sqrt(2);
+        else
+            k = (0:size(a,1)-1).';       % Wavenumber
+            q = k/sqrt(numel(k)-1);      % Reduced wavenumber
+        end
+        
+        % Assemble GRF and its derivatives
+        varargout = cell(1,nargout-1);
+        for nd = 0:nargout-2
+            aq = bsxfun(@times,a,q.^nd);
+            switch mod(nd,4)
+                case 0
+                    f = @(x) sum(bsxfun(@times,  cos(q*x), aq(:,1) ) + ...
+                                 bsxfun(@times,  sin(q*x), aq(:,2) ),1);
+                case 1
+                    f = @(x) sum(bsxfun(@times, -sin(q*x), aq(:,1) ) + ...
+                             	 bsxfun(@times,  cos(q*x), aq(:,2) ),1);
+                case 2
+                    f = @(x) sum(bsxfun(@times, -cos(q*x), aq(:,1) ) + ...
+                                 bsxfun(@times, -sin(q*x), aq(:,2) ),1);
+                case 3
+                    f = @(x) sum(bsxfun(@times,  sin(q*x), aq(:,1) ) + ...
+                                 bsxfun(@times, -cos(q*x), aq(:,2) ),1);
+            end
+            varargout{nd+1} = f;
+        end
+        
+    end
+    
+    function write_output(record_flag,outfile,data_out)
+        
+        % Record Flags
+        % 1     Potential is valid; simulated slow roll
+        % 2     Checked for false vacuum tunneling
+        % 3     Found a valid basin with sufficient N_e
+        
+        % Idx   Output          Type        Record Flag
+        % 1     mv              (float,4)   1,2,3
+        % 2  	status          (int)       1,2,3
+        % 3     Ntotal          (float,2)   1,2,3
+        % 4		rho_offset      (float,4)   3
+        % 5  	flag_fv_eternal (bool)      2,3
+        % 6  	log_tunnel_rate (float,4)   2,3
+        % 7  	numStochEpochs  (int)       3
+        % 8  	NSinceStoch     (float,2)   3
+        % 9  	numTopolEpochs  (int)       3
+        % 10  	Q               (float,4)   3
+        % 11 	r               (float,4)   3
+        % 12 	n_s             (float,4)   3
+        % 13 	alpha           (float,4)   3
+        % 14 	n_t             (float,4)   3
+        % 15 	dlgrho          (float,4)   3
+        % 16 	lgOk            (float,4)   3
+        % 17 	rho_Lambda      (float,4)   3
+        
+        % Open output file for recording results
+        % Record various amounts of data based on how far code ran
+        
+        switch record_flag
+            case 1
+                fid = fopen(outfile,'at');
+                fprintf(fid,'%d,%d,%.3G,%.4G\r\n',...
+                    [1 data_out(2:4)]);
+                fclose(fid);
+            case 2
+                fid = fopen(outfile,'at');
+                fprintf(fid,'%d,%d,%.3G,%.4G,%d,%.4G,%d,%.4G\r\n',...
+                    [2 data_out([2:6 18 19])]);
+                fclose(fid);
+            case 3
+                fid = fopen(outfile,'at');
+                fprintf(fid,'%d,%d,%.3G,%.4G,%d,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
+                    [3 data_out([2:6 18 19 7:17])]);
+                fclose(fid);
+        end
         
     end
     
 end
 
-% Deprecated
+methods
+    
+    function obj = EternalInflationSimulator(params,varargin)
+        % Constructor
+        % Inputs (varargin)
+        % 1) params     A structure containing some or all of the fields in
+        %               EternalInflationSimulator.parameters
+        % 2) {field1,val1,field2,val2,...}  Field and value pairs
+        
+        if nargin < 1, params = struct(); end
+        
+        obj.set_parameters(params,varargin{:});
+        
+    end
+    
+    function set_parameters(obj,varargin)
+        % Set simulation parameters
+        % Inputs (varargin)
+        % 1) params     A structure containing some or all of the fields in
+        %               EternalInflationSimulator.parameters
+        % 2) {field1,val1,field2,val2,...}  Field and value pairs
+        
+        if nargin == 2
+            val = varargin{:};
+        else
+            val = struct(varargin{:});
+        end
+        
+        for fn = fieldnames(val).'
+            switch fn{:}
+                
+                case 'n_iter'
+                    if isnumeric(val.n_iter) && isscalar(val.n_iter) && ...
+                            isfinite(val.n_iter) && val.n_iter ~= 0 && ...
+                            mod(val.n_iter,1) == 0 && isreal(val.n_iter)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.n_iter must be a positive integer.');
+                    end
+                    
+                case 'cores'
+                    if isnumeric(val.cores) && isscalar(val.cores) && ...
+                            isfinite(val.cores) && val.cores ~= 0 && ...
+                            mod(val.cores,1) == 0 && isreal(val.cores)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.cores must be a positive integer.');
+                    end
+                    
+                case 'mv'
+                    
+                    if isnumeric(val.mv) && isscalar(val.mv) && ...
+                            isfinite(val.mv) && val.mv > 0 && isreal(val.mv)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.mv must be a positive number.');
+                    end
+                    
+                case 'mh'
+                    
+                    if isnumeric(val.mh) && isscalar(val.mh) && ...
+                            isfinite(val.mh) && val.mh > 0 && isreal(val.mh)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.mh must be a positive number.');
+                    end
+                    
+                case 'kmax'
+                    if isnumeric(val.kmax) && isscalar(val.kmax) && ...
+                            isfinite(val.kmax) && isreal(val.kmax)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.kmax must be a real, finite number.');
+                    end
+                    
+                case 'gamma'
+                    if isnumeric(val.gamma) && isscalar(val.gamma) && ...
+                            isfinite(val.gamma) && isreal(val.gamma)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.gamma must be a real, finite number.');
+                    end
+                    
+                case 'Nafter'
+                    if isnumeric(val.Nafter) && isscalar(val.Nafter) && ...
+                            isfinite(val.Nafter) && val.Nafter > 0 && ...
+                            isreal(val.Nafter)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.Nafter must be a finite, positive number.');
+                    end
+                    
+                case 'lambdascreenmode'
+                    if islogical(val.lambdascreenmode) && isscalar(val.lambdascreenmode)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.lambdascreenmode must be a logical.');
+                    end
+                    
+                case 'rho_Lambda_thres'
+                    if isscalar(val.rho_Lambda_thres) && isreal(val.rho_Lambda_thres)
+                        obj.parameters.(fn{:}) = abs(val.(fn{:}));
+                    else
+                        error('parameters.rho_Lambda_thres must be a real number.');
+                    end
+                    
+                case 'fixQ'
+                    if islogical(val.fixQ) && isscalar(val.fixQ)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.fixQ must be a logical.');
+                    end
+                    
+                case 'measure'
+                    if ismember(upper(val.measure),{'A','B'})
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.measure must be ''A'' or ''B''');
+                    end
+                    
+                case 'n_tunnel_max'
+                    if isnumeric(val.n_tunnel_max) && isscalar(val.n_tunnel_max) && ...
+                            isfinite(val.n_tunnel_max) && ...
+                            mod(val.n_tunnel_max,1) == 0 && isreal(val.n_tunnel_max)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.n_tunnel_max must be a real, finite integer.');
+                    end
+                    
+                case 'n_recycle'
+                    if isnumeric(val.n_recycle) && isscalar(val.n_recycle) && ...
+                            isfinite(val.n_recycle) && val.n_recycle > 0 && ...
+                            mod(val.n_recycle,1) == 0 && isreal(val.n_recycle)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.n_recycle must be a real, finite, positive integer.');
+                    end
+                    
+                case 'seed'
+                    if isnumeric(val.seed) && isscalar(val.seed) && ...
+                            isfinite(val.seed) && val.seed > 0 && ...
+                            mod(val.seed,1) == 0 && isreal(val.seed)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    elseif isscalar(val.seed) && isnan(val.seed)
+                        obj.parameters.(fn{:}) = val.(fn{:});
+                    else
+                        error('parameters.seed must be a real, finite, positive integer.');
+                    end
+                    
+                case 'outfile'
+                    if ischar(val.outfile)
+                        obj.parameters.outfile = val.outfile;
+                    else
+                        error('Output file name must be a string.');
+                    end
+                    
+                case 'randstream'
+                    if isempty(val.randstream) || isa(val.randstream,'RandStream')
+                        obj.parameters.randstream = val.randstream;
+                        if ~isempty(val.randstream)
+                            obj.parameters.seed = val.randstream.Seed;
+                        end
+                    else
+                        error('randstream must be an object of class RandStream.');
+                    end
+                    
+            end
+        end
+    end
+    
+end
+
+properties (Constant)
+    
+    % Always hbar = c = 1
+    m_Pl = sqrt(8*pi); % Planck mass
+    M_Pl = 1;  % Reduced Planck mass
+    
+end
+
+%% Deprecated
+
 methods (Static)
     
     function [phistop] = lambdascreen(phiend,V,phiscale,Vstart,Vpstart)
@@ -2067,288 +2261,6 @@ methods (Static)
     
 end
 
-%% Utilities
-
-methods (Static)
-    
-    function [a,varargout] = gaussian_random_field_1D(n,gamma,a)
-        % [a,V,Vp,Vpp,...] = gaussian_random_field(k_max,gamma,coeffs)
-        %
-        % Inputs
-        %   n       Number of wavenumbers (integer)
-        %   gamma   A parameter that determines frequency dependence
-        %   a       If provided, then those coefficients are used to reproduce
-        %           a GRF generated by a previous call to this function
-        %
-        % Outputs
-        %   a               Fourier coefficients of GRF
-        %   {V,Vp,Vpp,...}  Gaussian random field and it's 1st, 2nd, ..., nth
-        %                   derivatives, respectively, in function form.
-        
-        % Generate new coefficients
-        % or use existing coefficients
-        if nargin < 3
-            if nargin < 1, n = 50;     end
-            if nargin < 2, gamma = 0;   end
-            k = (0:n).';
-            q = k/sqrt(n);
-            sigma = sqrt(q.^gamma .* exp(-q.^2/2));
-            sigma(1) = sigma(1) / sqrt(2);
-            a = randn(length(q),2) .* [sigma sigma];
-            a = a/norm(sigma([end:-1:2 1:end]))/sqrt(2);
-        else
-            k = (0:size(a,1)-1).';       % Wavenumber
-            q = k/sqrt(numel(k)-1);      % Reduced wavenumber
-        end
-        
-        % Assemble GRF and its derivatives
-        varargout = cell(1,nargout-1);
-        for nd = 0:nargout-2
-            aq = bsxfun(@times,a,q.^nd);
-            switch mod(nd,4)
-                case 0
-                    f = @(x) sum(bsxfun(@times,  cos(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times,  sin(q*x), aq(:,2) ),1);
-                case 1
-                    f = @(x) sum(bsxfun(@times, -sin(q*x), aq(:,1) ) + ...
-                             	 bsxfun(@times,  cos(q*x), aq(:,2) ),1);
-                case 2
-                    f = @(x) sum(bsxfun(@times, -cos(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times, -sin(q*x), aq(:,2) ),1);
-                case 3
-                    f = @(x) sum(bsxfun(@times,  sin(q*x), aq(:,1) ) + ...
-                                 bsxfun(@times, -cos(q*x), aq(:,2) ),1);
-            end
-            varargout{nd+1} = f;
-        end
-        
-    end
-    
-    function write_output(record_flag,outfile,data_out)
-        
-        % Record Flags
-        % 1     Potential is valid; simulated slow roll
-        % 2     Checked for false vacuum tunneling
-        % 3     Found a valid basin with sufficient N_e
-        
-        % Idx   Output          Type        Record Flag
-        % 1     mv              (float,4)   1,2,3
-        % 2  	status          (int)       1,2,3
-        % 3     Ntotal          (float,2)   1,2,3
-        % 4		rho_offset      (float,4)   3
-        % 5  	flag_fv_eternal (bool)      2,3
-        % 6  	log_tunnel_rate (float,4)   2,3
-        % 7  	numStochEpochs  (int)       3
-        % 8  	NSinceStoch     (float,2)   3
-        % 9  	numTopolEpochs  (int)       3
-        % 10  	Q               (float,4)   3
-        % 11 	r               (float,4)   3
-        % 12 	n_s             (float,4)   3
-        % 13 	alpha           (float,4)   3
-        % 14 	n_t             (float,4)   3
-        % 15 	dlgrho          (float,4)   3
-        % 16 	lgOk            (float,4)   3
-        % 17 	rho_Lambda      (float,4)   3
-        
-        % Open output file for recording results
-        % Record various amounts of data based on how far code ran
-        
-        switch record_flag
-            case 1
-                fid = fopen(outfile,'at');
-                fprintf(fid,'%d,%d,%.3G,%.4G\r\n',...
-                    [1 data_out(2:4)]);
-                fclose(fid);
-            case 2
-                fid = fopen(outfile,'at');
-                fprintf(fid,'%d,%d,%.3G,%.4G,%d,%.4G,%d,%.4G\r\n',...
-                    [2 data_out([2:6 18 19])]);
-                fclose(fid);
-            case 3
-                fid = fopen(outfile,'at');
-                fprintf(fid,'%d,%d,%.3G,%.4G,%d,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
-                    [3 data_out([2:6 18 19 7:17])]);
-                fclose(fid);
-        end
-        
-    end
-    
-end
-
-%% Constructor
-
-methods
-    
-    function obj = EternalInflationSimulator(params,varargin)
-        % Constructor
-        % Inputs (varargin)
-        % 1) params     A structure containing some or all of the fields in
-        %               EternalInflationSimulator.parameters
-        % 2) {field1,val1,field2,val2,...}  Field and value pairs
-        
-        if nargin < 1, params = struct(); end
-        
-        obj.set_parameters(params,varargin{:});
-        
-    end
-    
-    function set_parameters(obj,varargin)
-        % Set simulation parameters
-        % Inputs (varargin)
-        % 1) params     A structure containing some or all of the fields in
-        %               EternalInflationSimulator.parameters
-        % 2) {field1,val1,field2,val2,...}  Field and value pairs
-        
-        if nargin == 2
-            val = varargin{:};
-        else
-            val = struct(varargin{:});
-        end
-        
-        for fn = fieldnames(val).'
-            switch fn{:}
-                
-                case 'n_iter'
-                    if isnumeric(val.n_iter) && isscalar(val.n_iter) && ...
-                            isfinite(val.n_iter) && val.n_iter ~= 0 && ...
-                            mod(val.n_iter,1) == 0 && isreal(val.n_iter)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.n_iter must be a positive integer.');
-                    end
-                    
-                case 'cores'
-                    if isnumeric(val.cores) && isscalar(val.cores) && ...
-                            isfinite(val.cores) && val.cores ~= 0 && ...
-                            mod(val.cores,1) == 0 && isreal(val.cores)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.cores must be a positive integer.');
-                    end
-                    
-                case 'mv'
-                    
-                    if isnumeric(val.mv) && isscalar(val.mv) && ...
-                            isfinite(val.mv) && val.mv > 0 && isreal(val.mv)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.mv must be a positive number.');
-                    end
-                    
-                case 'mh'
-                    
-                    if isnumeric(val.mh) && isscalar(val.mh) && ...
-                            isfinite(val.mh) && val.mh > 0 && isreal(val.mh)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.mh must be a positive number.');
-                    end
-                    
-                case 'kmax'
-                    if isnumeric(val.kmax) && isscalar(val.kmax) && ...
-                            isfinite(val.kmax) && isreal(val.kmax)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.kmax must be a real, finite number.');
-                    end
-                    
-                case 'gamma'
-                    if isnumeric(val.gamma) && isscalar(val.gamma) && ...
-                            isfinite(val.gamma) && isreal(val.gamma)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.gamma must be a real, finite number.');
-                    end
-                    
-                case 'Nafter'
-                    if isnumeric(val.Nafter) && isscalar(val.Nafter) && ...
-                            isfinite(val.Nafter) && val.Nafter > 0 && ...
-                            isreal(val.Nafter)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.Nafter must be a finite, positive number.');
-                    end
-                    
-                case 'lambdascreenmode'
-                    if islogical(val.lambdascreenmode) && isscalar(val.lambdascreenmode)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.lambdascreenmode must be a logical.');
-                    end
-                    
-                case 'rho_Lambda_thres'
-                    if isscalar(val.rho_Lambda_thres) && isreal(val.rho_Lambda_thres)
-                        obj.parameters.(fn{:}) = abs(val.(fn{:}));
-                    else
-                        error('parameters.rho_Lambda_thres must be a real number.');
-                    end
-                    
-                case 'fixQ'
-                    if islogical(val.fixQ) && isscalar(val.fixQ)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.fixQ must be a logical.');
-                    end
-                    
-                case 'measure'
-                    if ismember(upper(val.measure),{'A','B'})
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.measure must be ''A'' or ''B''');
-                    end
-                    
-                case 'n_tunnel_max'
-                    if isnumeric(val.n_tunnel_max) && isscalar(val.n_tunnel_max) && ...
-                            isfinite(val.n_tunnel_max) && ...
-                            mod(val.n_tunnel_max,1) == 0 && isreal(val.n_tunnel_max)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.n_tunnel_max must be a real, finite integer.');
-                    end
-                    
-                case 'n_recycle'
-                    if isnumeric(val.n_recycle) && isscalar(val.n_recycle) && ...
-                            isfinite(val.n_recycle) && val.n_recycle > 0 && ...
-                            mod(val.n_recycle,1) == 0 && isreal(val.n_recycle)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.n_recycle must be a real, finite, positive integer.');
-                    end
-                    
-                case 'seed'
-                    if isnumeric(val.seed) && isscalar(val.seed) && ...
-                            isfinite(val.seed) && val.seed > 0 && ...
-                            mod(val.seed,1) == 0 && isreal(val.seed)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    elseif isscalar(val.seed) && isnan(val.seed)
-                        obj.parameters.(fn{:}) = val.(fn{:});
-                    else
-                        error('parameters.seed must be a real, finite, positive integer.');
-                    end
-                    
-                case 'outfile'
-                    if ischar(val.outfile)
-                        obj.parameters.outfile = val.outfile;
-                    else
-                        error('Output file name must be a string.');
-                    end
-                    
-                case 'randstream'
-                    if isempty(val.randstream) || isa(val.randstream,'RandStream')
-                        obj.parameters.randstream = val.randstream;
-                        if ~isempty(val.randstream)
-                            obj.parameters.seed = val.randstream.Seed;
-                        end
-                    else
-                        error('randstream must be an object of class RandStream.');
-                    end
-                    
-            end
-        end
-    end
-    
-end
-
 end
 
 function varargout = build_potential(f,Mv,Mh,d_range)
@@ -2381,30 +2293,64 @@ function varargout = build_potential(f,Mv,Mh,d_range)
     
 end
 
-function x = binarysearch(fun,xmin,xmax,dx,swap_condition)
-
-if nargin < 5, swap_condition = false; end
-
-if swap_condition
-    xtmp = xmin;
-    xmin = xmax;
-    xmax = xtmp;
-end
-
-x = 0.5*(xmin + xmax);
-
-while abs(xmax-xmin) > abs(dx)
-    if fun(x) > 0
-        xmax = x;
-    else
-        xmin = x;
-    end
-    x = 0.5*(xmin + xmax);
-end
-
-end
-
-
+% %         % Here \kappa = 1
+% %         stochasticEIC = @(x) (kappa*V(x)).^(3/2) > 2*pi*sqrt(3)*(0.607)*abs(Vp(x)); % stochasticEIC > 0 -> Eternal
+% %         
+% %         % Find the value of the field 55 e-folds
+% %         % before the end of slow roll inflation
+% %         
+% %         lna_steps = 0:floor(Ntotal);
+% %         if length(lna_steps) == 1, return, end
+% %         [~,phi_N] = ode45(dphi_dlna,lna_steps,phistart);                 % Phi values separated by 1 e-fold of inflation
+% %         phi_N = sort([phi_N; phiend; linspace(phistart,phimax,20).']).'; % Add search points between phistart and phimax
+% %         if phimax > phistart, phi_N = fliplr(phi_N); end                 % Order [phimax; ... phistart; ... phiend]
+% %         phi_N(isnan(phi_N)) = [];
+% %         
+% %         % Find where stochastic eternal inflation starts/ends
+% %         % Should always be eternal at phimax
+% %         intv_ind = find(diff(stochasticEIC(phi_N)));
+% %         off2on_sei   = feval(@(x) x(intv_ind) > 0, diff(stochasticEIC(phi_N)));
+% %         phibreak_sei = arrayfun(@(i) fzero(stochasticEIC,phi_N(i:i+1)),intv_ind);
+% %         
+% %         if isempty(phibreak_sei)
+% %             phibreak_sei = phimax;
+% %             off2on_sei = 0;
+% %         end
+        
+% %         % Second derivative check for stochastic eternal inflation near the
+% %         % maximum. Assume potential is locally mirror symmetric about maximum,
+% %         % or we condition on the field falling only toward phistart.
+% %         phidev = phimax-phibreak_sei(1); Hmax = sqrt(V(phimax)/3);
+% %         if abs(erf(abs(phidev/(Hmax/2/pi))/sqrt(2))) > exp(-3)
+% %             numStochEpochs = uint8(1 + nnz(off2on_sei));
+% %         else
+% %             stochasticEIC = @(x) stochasticEIC(x) & ...
+% %                 ~(min(phimax,phibreak_sei(1)) <= x && x <= max(phimax,phibreak_sei(1)));
+% %             phibreak_sei(1) = []; off2on_sei(1) = [];
+% %             numStochEpochs = uint8(nnz(off2on_sei));
+% %         end
+        
+% %         % Compute # of e-folds after past SEI breakdown and before phiexit
+% %         if stochasticEIC(phiexit)
+% %             NSinceStoch = 0; % Eternal at phiexit
+% %         elseif any((phibreak_sei(~off2on_sei)-phiexit)*Vp(phiexit) > 0)
+% %             phib = phibreak_sei((phibreak_sei-phiexit)*Vp(phiexit) > 0 & ~off2on_sei);
+% %             [~,imin] = min(abs(phib-phiexit));
+% %             NSinceStoch = integral(@(x) dlna_dphi(x).*slowroll(x),...
+% %                 phib(imin),phiexit);
+% %         else
+% %             NSinceStoch = NaN; % Never eternal before phiexit
+% %         end
+        
+        % Compute # of e-folds eternal after phistart and before phiend
+%         if strcmpi(p.measure,'a') && stochasticEIC(phistart)
+%             NStochastic = Inf;
+%         else
+%             NStochastic = nan;
+% %             datastruct.NStochastic = integral(@(x) ...
+% %                 dlna_dphi(x).*stochasticEIC(x).*slowroll(x),phistart,phiend);
+%         end
+        
 % %             if shift_potential == 1
 % %                 % Rescale mv so that Q matches observation
 % %                 Q_target = 2e-5;

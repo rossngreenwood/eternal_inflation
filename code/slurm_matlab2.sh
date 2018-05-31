@@ -30,14 +30,42 @@ while getopts ":r::c:" opt; do
 done
 
 if [[ $range_flag -gt 0 ]]; then
-
+  
+  infile="/hb/home/rngreenw/eternal_inflation/data/input/infile_"
+  infile+="%04d"
+  infile+=".txt"
+  
+  outdir="/hb/home/rngreenw/eternal_inflation/data/out_"
+  outdir+="%04d"
+  outdir+="/"
+  
+  printf -v range_str '[%d,%d]' ${@:(-2):1} ${@: -1}  
+  
+  cmd="cd('/hb/home/rngreenw/eternal_inflation/code');eternal_sim_leader("
+  cmd+=$cores
+  cmd+=",1,"
+  cmd+=$range_str
+  cmd+=",'"
+  cmd+=$infile
+  cmd+="','','"
+  cmd+=$outdir
+  cmd+="');exit"
+  
+  # Make sure output directories exist
   for ((test_id=${@:(-2):1}; test_id<=${@: -1}; test_id++))
   do
     printf -v id_str '%04d' $test_id
+    mkdir -p /hb/home/rngreenw/eternal_inflation/data/out_$id_str
+  done
+  
+  # Run simulations for all test_ids
+  srun sh /hb/software/apps/matlab/2017b/bin/matlab -nodisplay -nodesktop -r $cmd
+  
+  # Combine output
+  for ((test_id=${@:(-2):1}; test_id<=${@: -1}; test_id++))
+  do
     
-    infile="/hb/home/rngreenw/eternal_inflation/data/input/infile_"
-    infile+=$id_str
-    infile+=".txt"
+    printf -v id_str '%04d' $test_id
     
     outfile="outfile_"
     outfile+=$id_str
@@ -51,18 +79,6 @@ if [[ $range_flag -gt 0 ]]; then
     outdir+=$id_str
     outdir+="/"
     
-    cmd="cd('/hb/home/rngreenw/eternal_inflation/code');eternal_sim_leader("
-    cmd+=$cores
-    cmd+=",'"
-    cmd+=$infile
-    cmd+="','"
-    cmd+=$outfile
-    cmd+="','"
-    cmd+=$outdir
-    cmd+="');exit"
-    
-    mkdir -p /hb/home/rngreenw/eternal_inflation/data/out_$id_str
-    srun sh /hb/software/apps/matlab/2017b/bin/matlab -nodisplay -nodesktop -r $cmd
     python /hb/home/rngreenw/eternal_inflation/code/eternal_sim_cleanup.py --cores $cores --output_dir $outdir --output_file $outfile
     python /hb/home/rngreenw/eternal_inflation/code/eternal_sim_cleanup.py --cores $cores --output_dir $outdir --output_file $outfile_t --truncate 1
   done

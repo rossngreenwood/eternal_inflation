@@ -1,15 +1,19 @@
 
-function eternal_sim_leader(cores,input_file,output_file,output_dir)
+function eternal_sim_leader(cores,flag_range,range,input_file,output_file,output_dir)
     
     warning('off');
     
-    if nargin < 2, input_file = 'infile.txt';   end
-    if nargin < 3, output_file = 'outfile.txt'; end
-    if nargin < 4, output_dir = '';             end
+    if nargin < 4, input_file = 'infile.txt';   end
+    if nargin < 5, output_file = 'outfile.txt'; end
+    if nargin < 6, output_dir = '';             end
+    
+    parpool(cores) % Open a parallel pool
+    
+    for test_id = range(1):range(2)
     
     %% Gather parameters from input file
     
-    fid = fopen(input_file,'r');
+    fid = fopen(sprintf(input_file,test_id),'r');
     meta_line = fgets(fid);
     is = 1; fclose(fid);
     
@@ -36,12 +40,12 @@ function eternal_sim_leader(cores,input_file,output_file,output_dir)
     
     %% Run code in parallel
     
-    parpool(cores) % Open a parallel pool
     
     spmd % Execute this code in parallel
         
-        worker_outfile = strcat(output_dir,sprintf('.worker_%d.txt',labindex-1));
-        
+        worker_outfile = strcat(...
+            sprintf(output_dir,test_id),sprintf('.worker_%d.txt',labindex-1));
+        disp(worker_outfile)
         warning('off');
         
         eis = EternalInflationSimulator(...
@@ -64,5 +68,9 @@ function eternal_sim_leader(cores,input_file,output_file,output_dir)
         eis.main();
         
     end
+    
+    end % for
+
+    delete(gcp('nocreate'));
     
 end

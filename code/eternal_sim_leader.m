@@ -1,19 +1,11 @@
-
-function eternal_sim_leader(cores,flag_range,range,input_file,output_file,output_dir)
+function eternal_sim_leader(cores,input_file,output_dir)
     
-    warning('off');
-    
-    if nargin < 4, input_file = 'infile.txt';   end
-    if nargin < 5, output_file = 'outfile.txt'; end
-    if nargin < 6, output_dir = '';             end
-    
-    parpool(cores) % Open a parallel pool
-    
-    for test_id = range(1):range(2)
+    if nargin < 2, input_file = 'infile.txt';   end
+    if nargin < 3, output_dir = '';             end
     
     %% Gather parameters from input file
     
-    fid = fopen(sprintf(input_file,test_id),'r');
+    fid = fopen(input_file,'r');
     meta_line = fgets(fid);
     is = 1; fclose(fid);
     
@@ -22,12 +14,12 @@ function eternal_sim_leader(cores,flag_range,range,input_file,output_file,output
     [mh,~,~,is1]     = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
     [kmax,~,~,is1]   = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
     [gamma,~,~,is1]  = sscanf(meta_line(is:end),'%f,',1); is = is+is1-1;
-
+    
     [measure,~,~,is1]           = sscanf(meta_line(is:end),'%c,',1); is = is+is1-1;
     [n_tunnel_max,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
     [lambdascreen,~,~,is1]      = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
-    [rho_Lambda_thres,~,~,is1]  = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
-    [fixQ,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
+    [mv_offset_max,~,~,is1]     = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
+    [auxFlag,~,~,is1]           = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
     [Nafter,~,~,is1]            = sscanf(meta_line(is:end),'%G,',1); is = is+is1-1;
     [seed,~,~,is1]              = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
     [n_recycle,~,~,is1]         = sscanf(meta_line(is:end),'%d,',1); is = is+is1-1;
@@ -40,12 +32,12 @@ function eternal_sim_leader(cores,flag_range,range,input_file,output_file,output
     
     %% Run code in parallel
     
+    parpool(cores) % Open a parallel pool
     
     spmd % Execute this code in parallel
         
-        worker_outfile = strcat(...
-            sprintf(output_dir,test_id),sprintf('.worker_%d.txt',labindex-1));
-        disp(worker_outfile)
+        worker_outfile = strcat(output_dir,sprintf('.worker_%d.txt',labindex-1));
+        
         warning('off');
         
         eis = EternalInflationSimulator(...
@@ -58,8 +50,7 @@ function eternal_sim_leader(cores,flag_range,range,input_file,output_file,output
             'measure',          measure,...
             'n_tunnel_max',     n_tunnel_max,...
             'lambdascreenmode', logical(lambdascreen),...
-            'rho_Lambda_thres', rho_Lambda_thres,...
-            'fixQ',             logical(fixQ),...
+            'mv_offset_max',    mv_offset_max,...
             'Nafter',           Nafter,...
             'n_recycle',        n_recycle,...
             'randstream',       rs{labindex},...
@@ -68,9 +59,5 @@ function eternal_sim_leader(cores,flag_range,range,input_file,output_file,output
         eis.main();
         
     end
-    
-    end % for
-
-    delete(gcp('nocreate'));
     
 end

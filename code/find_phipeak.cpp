@@ -141,14 +141,15 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     *Vppeak = 0;
 
     phipeak = 0.5*(phimin + phimax);
+    Vppeak = gaussian_random_field_eval_c(a_in_m,phipeak,1);
     while (abs((phimax-phimin)/dphi) >= 1 || sgn*(*Vppeak) < 0) {
-        Vppeak = gaussian_random_field_eval_c(a_in_m,phipeak,1);
         if (sgn*(*Vppeak) > 0) {
             phimax = phipeak;
         } else {
             phimin = phipeak;
         }
         phipeak = 0.5*(phimin + phimax);
+        Vppeak = gaussian_random_field_eval_c(a_in_m,phipeak,1);
     }
 
     *phipeak_out = phipeak;

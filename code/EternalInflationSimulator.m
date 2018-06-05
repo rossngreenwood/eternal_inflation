@@ -55,7 +55,6 @@ methods (Access = public)
                 if mod(i_iter,p.n_recycle) == 1
                     [ak,f{1:3}] = obj.gaussian_random_field_1D(p.kmax,p.gamma);
                     V0   = Mv^4*f{1}(phi0/Mh);
-                    Vpp0 = Mv^4*f{3}(phi0/Mh)/Mh^2;
                 end
                 
                 % Maximum amount by which to shift potential
@@ -76,6 +75,7 @@ methods (Access = public)
                         
                         if mod(i_iter,p.n_recycle) == 1
                             Vp0  = Mv^4*f{2}(phi0/Mh)/Mh;
+                            Vpp0 = Mv^4*f{3}(phi0/Mh)/Mh^2;
                         end
                         
                         % Check if slow roll is valid at starting point

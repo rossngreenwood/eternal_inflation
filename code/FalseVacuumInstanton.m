@@ -57,14 +57,12 @@ methods
         end
         
         if isscalar(val.phi_absMin) && isreal(val.phi_absMin)
-%             self.phi_absMin  = fminsearch(self.V,val.phi_absMin);
             self.phi_absMin = val.phi_absMin;
         else
             error('phi_absMin must be a real number.');
         end
         
         if isscalar(val.phi_metaMin) && isreal(val.phi_metaMin)
-%             self.phi_metaMin = fminsearch(self.V,val.phi_metaMin);
             self.phi_metaMin = val.phi_metaMin;
         else
             error('phi_metaMin must be a real number.');
@@ -109,18 +107,15 @@ methods
         
         %% Find barrier location
         
-        phi_tol = abs(self.phi_metaMin - self.phi_absMin) * 1e-10;
+        phi_tol = abs(self.phi_metaMin - self.phi_absMin) * 1e-6;
         V_phimeta = self.V(self.phi_metaMin);
         
         phi1 = self.phi_metaMin;
         phi2 = self.phi_absMin;
         
         phi0 = 0.5 * (phi1+phi2); % Initial guess
-        sgn = sign(self.dV(phi0));
-        ii = 0;
         % Do a very simple binary search to narrow down on the right answer.
         while abs(phi1-phi2) > phi_tol
-            ii = ii+1;
             V0 = self.V(phi0);
             if (V0-V_phimeta) > 0
                 phi1 = phi0;
@@ -132,34 +127,41 @@ methods
         
         self.phi_bar = phi0;
         
-        %% Find characteristic length scale
+        %% Find the top of the barrier
         
-        negV = @(phi) -self.V(phi);
+        if isfield(val,'phi_bar_top') 
+            if isscalar(val.phi_bar_top) && isreal(val.phi_bar_top)
+                self.phi_bar_top = val.phi_bar_top;
+                phi_top = self.phi_bar_top;
+            else
+                error('phi_bar_top must be a real number.');
+            end
+        else
+            phi_tol = abs(self.phi_bar - self.phi_metaMin) * 1e-6;
+            phi1 = self.phi_metaMin;
+            phi2 = self.phi_bar;
+            sgn = sign(self.dV(self.phi_bar));
+            phi_top = 0.5 * (phi1+phi2);
+            while abs(phi1-phi2) > phi_tol
+                if sgn*self.dV(phi_top) < 0
+                    phi1 = phi_top;
+                else
+                    phi2 = phi_top;
+                end
+                phi_top = 0.5 * (phi1 + phi2);
+            end
+            self.phi_bar_top = phi_top;
+        end
         
-        % Find the top of the barrier
-        phi_guess = 0.5 * (self.phi_bar + self.phi_metaMin);
-        phi_tol = abs(self.phi_bar - self.phi_metaMin) * 1e-6;
-%         phi_max = self.phi_metaMin;
-%         phi_min = self.phi_bar;
-%         phi_top = phi_guess;
-%         while 
-%             if sgn*self.Vp(phi_top) > 0
-%                 phimax = phi_top;
-%             else
-%                 phimin = phi_top;
-%             end
-%             phi_top = 0.5 * (phi_max + phi_min);
-%         end
-%         phi_top = fminsearch(negV, phi_guess, optimset('TolX',phi_tol));
-%         phi_top = fzero(self.dV, [self.phi_metaMin self.phi_bar], optimset('TolX',phi_tol));
-        phi_top = EternalInflationSimulator.find_phipeak(phi_guess,self.V,self.dV,abs(self.phi_bar-self.phi_metaMin));
-        if ~(self.phi_bar < phi_top && phi_top < self.phi_metaMin || ...
-                self.phi_bar > phi_top && phi_top > self.phi_metaMin)
+        if ~((self.phi_bar < phi_top && phi_top < self.phi_metaMin) || ...
+                (self.phi_bar > phi_top && phi_top > self.phi_metaMin))
             error(['Minimization is placing the top of the ' ...
                 'potential barrier outside of the interval defined by ' ...
                 'phi_bar and phi_metaMin. Assume that the barrier does not exist.' ...
                 'no barrier']);
         end
+        
+        %% Find characteristic length scale
         
         Vtop = self.V(phi_top) - self.V(self.phi_metaMin);
         xtop = phi_top - self.phi_metaMin;
@@ -173,8 +175,6 @@ methods
             error(['Barrier height is not positive, ' ...
                 'does not exist.', 'no barrier']);
         end
-        
-        self.phi_bar_top = phi_top;
         self.rscale = abs(xtop) / sqrt(abs(6*Vtop));
         
     end

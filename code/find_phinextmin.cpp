@@ -73,7 +73,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     double phiend, *a, Vscale, rho_Lambda, phiscale;
     bool lambdascreenmode, also_peak;
     int search_direction;
-    
+
     mxArray *phipeak_out_m;
     double *phipeak_out, phipeak, phipeakmin, phipeakmax;
 
@@ -159,8 +159,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             if (search_direction*(*Vpstop) < 0 && *Vppstop < 0) {
                 flag_crossed_maximum = 1;
                 if (also_peak == 1) {
-                    phipeakmin = phinextmin;
-                    phipeakmax = phinextmin_last;
+                    phipeakmax = phinextmin;
+                    phipeakmin = phinextmin_last;
                 }
             }
         }
@@ -191,14 +191,15 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             return;
         }
         phipeak = 0.5*(phipeakmin + phipeakmax);
-        while (abs((phipeakmax-phipeakmin)/dphi) >= 1) {
-            Vpstop = gaussian_random_field_eval_c(a_in_m,phipeak/phiscale,1);
+        Vpstop = gaussian_random_field_eval_c(a_in_m,phipeak/phiscale,1);
+        while (abs((phipeakmax-phipeakmin)/dphi) >= 1 || search_direction*(*Vpstop) > 0) {
             if (search_direction*(*Vpstop) > 0) {
-                phipeakmax = phipeak;
-            } else {
                 phipeakmin = phipeak;
+            } else {
+                phipeakmax = phipeak;
             }
             phipeak = 0.5*(phipeakmin + phipeakmax);
+            Vpstop = gaussian_random_field_eval_c(a_in_m,phipeak/phiscale,1);
         }
 
         *phipeak_out = phipeak;

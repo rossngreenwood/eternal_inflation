@@ -251,7 +251,14 @@ methods (Access = public)
                     if i_tunnel > 0 && (isnan(phi(it,6)) || V(phi(it,6)) < 0)
                         break % Vacuum energy is negative
                     elseif ~isnan(phi(it,5))
-                        last_valid = it; % Inflation ends - OK
+                        if sign(phi(it,5)-phi(it,3)) == sign(phi(it,6)-phi(it,5))
+                            last_valid = it; % Inflation ends - OK
+                        else
+                            % find_phiend didn't detect local min
+                            status(it,1) = 4;
+                            Ntotal(it,1) = NaN;
+                            phi(it,[4 5]) = [NaN, NaN];
+                        end
                     end
                     
                 end
@@ -277,15 +284,18 @@ methods (Access = public)
                 
                 %% Fill in gaps
                 
-                record_flag = 3;
-                
                 % Compute e-folds precisely if haven't already
                 if Ntotal(end) > 1.3*obj.parameters.Nafter
                     kappa = 8*pi/obj.m_Pl^2;
                     dlna_dphi = @(phi) (-kappa*V(phi)./Vp(phi));
                     Ntotal(end) = integral(dlna_dphi,phi(end,3),phi(end,5));
                     data_out(3) = Ntotal(end);
+                    if ~(Ntotal(end) > p.Nafter)
+                        break
+                    end
                 end
+                
+                record_flag = 3;
                 
                 % Set phi(:,1) = phipeak
                 phi(:,1) = real(phi(:,2));
@@ -386,7 +396,7 @@ methods (Access = protected)
         if flag_start_max
             Ntotal = Inf; % Started at a maximum
         else
-            points = linspace(phistart,phiend,max(10,abs(phistart-phiend)/mv/obj.m_Pl*10));
+            points = linspace(phistart,phiend,max(10,abs(phistart-phiend)/mh/obj.m_Pl*10));
             Ntotal_trapz = trapz(points,dlna_dphi(points));
             if  Ntotal_trapz > 0.7*obj.parameters.Nafter && ...
                     Ntotal_trapz < 1.3*obj.parameters.Nafter

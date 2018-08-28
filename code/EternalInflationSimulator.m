@@ -707,7 +707,7 @@ methods (Access = protected)
         
         %% Assuming a domain wall forms around maximum, does it persist?
         
-        if abs(Vpp(phiinit)/V(phiinit))/(8*pi/obj.m_Pl^2) > 1
+        if abs(Vpp(phipeak)/V(phipeak))/(8*pi/obj.m_Pl^2) > 1
             % No inflation at maximum
             flag_topological_eternal = false;
             return

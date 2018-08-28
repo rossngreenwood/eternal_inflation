@@ -133,8 +133,9 @@ methods (Access = public)
                         % Check for slow roll at peak (assume \epsilon_V << 1)
                         if abs(f{3}(xpeak)/(f{1}(xpeak)-V_offset/Mv^4)/Mh^2)/(8*pi/obj.m_Pl^2) > 1
                             data_out(2) = 3; % Start wherever slow roll starts
-                            phistart = obj.find_phistart(xpeak,@(x) f{1}(x)-V_offset/Mv^4,...
-                                @(x) f{2}(x)/Mh,@(x) f{3}(x)/Mh^2,Mh,obj.m_Pl)*Mh;
+                            break
+%                             phistart = obj.find_phistart(xpeak,@(x) f{1}(x)-V_offset/Mv^4,...
+%                                 @(x) f{2}(x)/Mh,@(x) f{3}(x)/Mh^2,Mh,obj.m_Pl)*Mh;
                         else
                             phistart = xpeak*Mh; % Start at maximum
                         end
@@ -705,6 +706,12 @@ methods (Access = protected)
         end
         
         %% Assuming a domain wall forms around maximum, does it persist?
+        
+        if abs(Vpp(phiinit)/V(phiinit))/(8*pi/obj.m_Pl^2) > 1
+            % No inflation at maximum
+            flag_topological_eternal = false;
+            return
+        end
         
         % Find value of phi at the domain wall boundary 
         % where inflation breaks down

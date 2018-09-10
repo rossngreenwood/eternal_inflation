@@ -311,7 +311,7 @@ methods (Access = public)
                 for b = 0:size(phi,1)-1 % Loop over basins
                     
                     % Stochastic eternal inflation
-                    [numStochEpochs,NSinceStoch] = obj.check_stochastic_eternal(V,Vp,phi(1+b,:));
+                    [numStochEpochs,NSinceStoch] = obj.check_stochastic_eternal(V,Vp,Vpp,phi(1+b,:));
                     data_out(7) = max(0,data_out(7)) + max(0,numStochEpochs);
                     data_out(8) = NSinceStoch; % Only keeps value from last basin
                     
@@ -520,7 +520,7 @@ methods (Access = protected)
         
     end
     
-    function [numStochEpochs,NSinceStoch] = check_stochastic_eternal(obj,V,Vp,phi)
+    function [numStochEpochs,NSinceStoch] = check_stochastic_eternal(obj,V,Vp,Vpp,phi)
         
         p = obj.parameters;
         
@@ -529,6 +529,8 @@ methods (Access = protected)
         
         numStochEpochs = nan; % Number of intervals of eternal inflation
         NSinceStoch    = nan; % Number of e-foldings between SEI breakdown and exit scale
+        
+        flag_starts_at_peak = (imag(phi(2)) ~= 0);
         
         phistart = phi(3);
         phiexit  = phi(4);
@@ -639,6 +641,13 @@ methods (Access = protected)
             % Require that SEI ends when inflation ends, if not sooner
             phibreak = [phistart phibreak];
             off2on   = [1        off2on];
+            if flag_starts_at_peak && (kappa*V(phistart))^(3/2) < 10.25 * Vpp(phistart)*phistart
+                phibreak = phibreak(min(3,end+1):end);
+                off2on   = off2on(min(3,end+1):end);
+                if isempty(phibreak)
+                    return
+                end
+            end
         end
         
         if off2on(end) == 1 % SEI is satisfied at phiend

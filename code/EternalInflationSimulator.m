@@ -735,6 +735,18 @@ methods (Access = protected)
             return
         end
         
+        % Check whether the amplitude of fluctuations at the maximum places
+        % more than (1-1/e) outside the inflating interval
+        if ~isreal(phistart) % Not starting at maximum
+            H = sqrt(kappa/3*V(real(phistart)));
+            dphi = hbar^0.5*H/2/pi; % Amplitude of quantum fluctuation: P_\phi(k) = (dphi)^2 = \hbar * (H/2/\pi)^2
+        end
+        if erf(abs(phiedge-phipeak)/(sqrt(2)*dphi)) < exp(-1)
+            % Fluctuations are too big at peak
+            flag_topological_eternal = false;
+            return
+        end
+        
         % Find value of phi that will descend to phiedge in time <= t_H
         dphi_dlna = @(lna,phi) -Vp(phi)./V(phi)/kappa;
         [~,phiout] = ode23(dphi_dlna,[1,0.5,0],phiedge);

@@ -62,7 +62,7 @@ methods (Access = public)
                 
                 switch p.measure
                     
-                    case 'A'
+                    case {'A','D'}
                         
                         % Check if potential energy is already too negative
                         if V0(ii) < -V_offset_max
@@ -163,6 +163,25 @@ methods (Access = public)
                         
                         Vstart  = []; Vpstart = [];
                         
+                    case 'D'
+                        
+                        % Look uphill for the (dim-less) potential peak
+                        xpeak = find_phipeak(phiinit/Mh,ak,1,0,1);
+                        
+                        % Move phiinit to peak; tag with fall direction
+                        phiinit = xpeak*Mh + 1i*sign(phiinit-xpeak*Mh);
+                        
+                        % Check for slow roll at peak (assume \epsilon_V << 1)
+                        if abs(f{3}(xpeak)/(f{1}(xpeak)-V_offset/Mv^4)/Mh^2)/(8*pi/obj.m_Pl^2) > 1
+                            data_out(2) = 3; % Start wherever slow roll starts
+                            phistart = obj.find_phistart(xpeak,@(x) f{1}(x)-V_offset/Mv^4,...
+                                @(x) f{2}(x)/Mh,@(x) f{3}(x)/Mh^2,1,obj.m_Pl)*Mh;
+                        else
+                            phistart = xpeak*Mh; % Start at maximum
+                        end
+                        
+                        Vstart  = []; Vpstart = [];
+                        
                 end
                 
                 %% Simulate inflation with tunneling events
@@ -232,6 +251,14 @@ methods (Access = public)
                         [phi(it,:),status(it,1),Ntotal(it,1),V,Vp,Vpp] = ...
                             obj.simulate_slowroll(f,phistart,V_offset,...
                             ~isreal(phiinit),Vstart,Vpstart);
+%                         if i_tunnel == 0 && strcmpi(p.measure,'D') && ...
+%                                 (isnan(Ntotal(it,1)) || Ntotal(it,1) < p.Nafter) && ...
+%                                 phistart == real(phiinit) && status(it,1) ~= 4
+%                             phistart = obj.find_phistart(phi(it,5),V,Vp,Vpp,Mh,obj.m_Pl);
+%                             [phi(it,:),status(it,1),Ntotal(it,1),V,Vp,Vpp] = ...
+%                                 obj.simulate_slowroll(f,phistart,V_offset,...
+%                                 ~isreal(phiinit),Vstart,Vpstart);
+%                         end 
                     end
                     
                     phi(it,2) = phiinit;
@@ -1487,7 +1514,7 @@ methods
                     end
                     
                 case 'measure'
-                    if ismember(upper(val.measure),{'A','B','C'})
+                    if ismember(upper(val.measure),{'A','B','C','D'})
                         obj.parameters.(fn{:}) = val.(fn{:});
                     else
                         error('parameters.measure must be ''A'' or ''B''');

@@ -3,7 +3,7 @@
 #SBATCH --job-name=etrnlinf
 #SBATCH --ntasks=1
 #SBATCH --mem-per-cpu=1000
-#SBATCH --time=48:00:00
+#SBATCH --time=120:00:00
 #SBATCH --output=/hb/home/rngreenw/eternal_inflation/data/etrnlinf_%j.out
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=fail
@@ -49,7 +49,7 @@ if [[ $range_flag -gt 0 ]]; then
   cmd+=$range_str
   cmd+=",'"
   cmd+=$infile
-  cmd+="','','"
+  cmd+="','"
   cmd+=$outdir
   cmd+="');exit"
   

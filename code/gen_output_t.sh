@@ -5,15 +5,11 @@ do
   
   printf -v id_str '%04d' $test_id
   
-  outdir="../data/out_"
-  outdir+=$id_str
-  outdir+="/"
+  echo $id_str 
   
-  outfile="outfile_t_"
-  outfile+=$id_str
-  outfile+=".txt"
+  outdir="../data/out_$id_str/"
+  outfile="outfile_t_$id_str.txt"
   
-  echo $id_str
-  
-  python eternal_sim_truncate.py --cores 24 --output_dir $outdir --output_file $outfile
+  python eternal_sim_cleanup.py --output_dir $outdir --output_file $outfile --truncate 1
+
 done

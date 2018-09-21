@@ -3,6 +3,7 @@ from __future__ import print_function
 import argparse
 import os
 import sys
+import numpy as np
 
 def main():
 
@@ -34,10 +35,23 @@ def main():
                 if filename == 0:
                     # Multiply the number of iterations for each worker by number of workers
                     header_list = header_line.split(',')
-                    n_iter = str(float(header_list[0])*cores)[:-2]
+                    n_iter = str(float(header_list[0])*float(header_list[1]))[:-2]
                     # Write header line only once, followed by a line of seeds
-                    print(n_iter + ',' + ','.join(header_list[1:13]+[header_list[13]]), file=outfile, end='')
+                    print(n_iter + ',' + ','.join(header_list[1:13]+[header_list[13]]) + '\r\n', file=outfile, end='')
                 for line in w_file:
+                    data_list = line.split(',')
+                    if len(data_list) > 12:
+                        n_s = float(data_list[13])
+                        Lambda = float(data_list[18])
+                        Q = float(data_list[11])
+			#log_tunnel_rate = float(data_list[6])
+                        if Q < np.sqrt(np.exp(3.089-3*0.036)/(1e10)) or Q > np.sqrt(np.exp(3.089+3*0.036)/(1e10)):
+                            continue
+                        if n_s < (0.9655-2*0.0062) or n_s > (0.9655+2*0.0062):
+                            continue
+                        if Lambda > 0 or Lambda < 0:
+                        #if log_tunnel_rate != 0:
+                            continue
                     if params.flag_truncate == 0 or line[:2] == '3,':
                         print(line, file=outfile, end='')
 

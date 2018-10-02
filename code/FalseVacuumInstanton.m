@@ -706,79 +706,26 @@ methods
             actionForm = 2;
         end
         
-        [Phi,dPhi,Rho,dRho] = deal(Y{1:4});
+        S = self.find_action_4D_static(self.alpha,self.kappa,self.V,R,Y,actionForm);
         
-        %% Compute volume terms for bubble interior/exterior (assumes 4D)
-        % Generalize to d dimensions?
+    end
+    
+    function B = find_tunneling_suppression(self,R,Y,actionForm)
+        % Computes the exponential suppression of the tunneling rate
+        %
+        % If \Gamma/V = A*exp(-B/\hbar)*(1 + O(\hbar)), then B is the
+        % exponential suppression of the tunneling rate
         
-        w_int = abs(self.kappa/3*self.V(Phi(1)))^0.5;
-        
-        % Integrate over the bubble interior
-        if w_int == 0 || self.no_gravity
-            
-            % field part    : integrate 2*pi^2*r^3*V dr from 0 to R
-            volume = pi^2*R(1)^4/2;
-            S = volume*self.V(Phi(1));
-            
-        elseif self.V(Phi(1)) > 0
-            
-            % field part    : integrate 2*pi^2*sin(w*r)^3/w^3*V dr from 0 to R
-            % geometry part : integrate 2*pi^2/k*(-sin(w*r)^3/w + sin(w*r)*cos(w*r)^2/w - sin(w*r)/w) dr from 0 to R
-            volume = 8*pi^2/3/w_int^4*sin(R(1)*w_int/2)^4*(cos(R(1)*w_int)+2); % = pi^2/6/w^4*(cos(3*R(1)*w)-9*cos(R(1)*w));
-            S = volume*(self.V(Phi(1)) - 6*w_int^2/self.kappa);
-            
+        if nargin < 4
+            B = find_tunneling_suppression_static(self.alpha,self.kappa,...
+                self.V,self.phi_metaMin,R,Y);
         else
-            
-            % field part    : integrate 2*pi^2*sinh(w*r)^3/w^3*V dr from 0 to R
-            % geometry part : integrate 2*pi^2/k*(sinh(w*r)^3/w + sinh(w*r)*cosh(w*r)^2/w - sinh(w*r)/w) dr from 0 to R
-            volume = 8*pi^2/3/w_int^4*sinh(R(1)*w_int/2)^4*(cosh(R(1)*w_int)+2); % = pi^2/6/w^4*(cosh(3*R(1)*w)-9*cosh(R(1)*w));
-            S = volume*(self.V(Phi(1)) + 6*w_int^2/self.kappa);
-            
+            if self.no_gravity
+                actionForm = 0;
+            end
+            B = find_tunneling_suppression_static(self.alpha,self.kappa,...
+                self.V,self.phi_metaMin,R,Y,actionForm);
         end
-        
-        if self.V(Phi(end)) > 0 || ~self.no_gravity
-            
-            % Integrate over the finite volume outside the bubble
-            w_ext = abs(self.kappa/3*self.V(Phi(end)))^0.5;
-            Rend = asin(w_ext*Rho(end))/w_ext;
-            if dRho(end) < 0, Rend = pi/w_ext - Rend; end
-            volume = 8*pi^2/w_ext^4 - 8*pi^2/3/w_ext^4*sin(Rend*w_ext/2)^4*(cos(Rend*w_ext)+2);
-            S = S + volume*(self.V(Phi(end)) - 6*w_ext^2/self.kappa);
-            
-        end
-        
-        %% Integrate Lagrangian for bubble wall
-        
-        if isscalar(R), return, end
-        
-        % Find the area of an n-sphere (alpha=n):
-        d = self.alpha + 1; % Number of dimensions in the integration
-        area = Rho.^self.alpha * 2*pi^(d*.5)/gamma(d*.5);
-        
-        % Select Lagrangian
-        switch actionForm
-            case 0
-                % Matter-only Lagrangian -- no gravity
-                lagr = 0.5*dPhi.^2 + self.V(Phi);
-                boundary = 0;
-            case 1
-                % Full Einstein-Hilbert Lagrangian
-                d2Rho = Y{5};
-                lagr = 0.5*dPhi.^2 + self.V(Phi) + 3./self.kappa.*(d2Rho./Rho + (dRho./Rho).^2 - Rho.^(-2));
-                boundary = 0;
-            case 2
-                % After integration by parts
-                lagr = 0.5*dPhi.^2 + self.V(Phi.').' - 3./self.kappa.*((dRho./Rho).^2 + Rho.^(-2));
-                boundary = 6*pi^2/self.kappa*(Rho(end)^2*dRho(end) - Rho(1)^2*dRho(1));
-            case 3
-                % After integration by parts and asserting on-shell GR
-                lagr = 2*self.V(Phi) - 6./self.kappa./Rho.^2;
-                boundary = 6*pi^2/self.kappa*(Rho(end)^2*dRho(end) - Rho(1)^2*dRho(1));
-        end
-        
-        %% Compute action for bubble wall
-        
-        S = S + trapz(R,area.*lagr) + boundary;
         
     end
     
@@ -870,61 +817,17 @@ methods
         
     end
     
-    function B = find_tunneling_suppression(self,R,Y)
-        % Computes the exponential suppression of the tunneling rate
-        %
-        % If \Gamma/V = A*exp(-B/\hbar)*(1 + O(\hbar)), then B is the
-        % exponential suppression of the tunneling rate
-        
-        Y = mat2cell(Y,size(Y,1),ones(1,size(Y,2)));
-        
-        %% Set up queries for the false vacuum background
-        % The "interior" and "exterior" volume terms are all we need, so
-        % just provide a single data point specifying phi_metaMin.
-        % find_action_4D won't bother integrating the Lagrangian.
-        
-        w = abs(self.kappa/3*self.V(self.phi_metaMin))^0.5;
-        if w == 0 || self.no_gravity
-            % Integrate inside the full support of the bubble.
-            R_bkgd     = R(end);
-            Rho_bkgd   = R(end);
-            dRho_bkgd  = 1;
-            d2Rho_bkgd = 0;
-        elseif self.V(self.phi_metaMin) > 0
-            % Integrate over the whole compact space. (Any R would work.)
-            R_bkgd     = pi/2/w;
-            Rho_bkgd   = 1/w;
-            dRho_bkgd  = 0;
-            d2Rho_bkgd = -w;
-        else
-            % Integrate until the radius of curvature of the background
-            % space matches that at the outer edge of the bubble wall.
-            R_bkgd     = asinh(Y{3}(end)*w)/w;
-            Rho_bkgd   = Y{3}(end);
-            dRho_bkgd  = cosh(R_bkgd*w);
-            d2Rho_bkgd = sinh(R_bkgd*w)*w;
-        end
-        
-        Y_bkgd = {self.phi_metaMin,0,Rho_bkgd,dRho_bkgd,d2Rho_bkgd};
-        
-        %% Compute tunneling rate exponential piece
-        
-        S_bubble = self.find_action_4D(R,Y);
-        S_bkgd   = self.find_action_4D(R_bkgd,Y_bkgd);
-        
-        B = S_bubble-S_bkgd;
-        
-    end
-    
 end
 
 methods (Static)
     
-    function B = find_tunneling_suppression_static(alpha,kappa,V,phi_metaMin,R,Y)
+    function B = find_tunneling_suppression_static(alpha,kappa,V,phi_metaMin,R,Y,actionForm)
         % Computes the exponential suppression of the tunneling rate
         %
         % If \Gamma/V = A*exp(-B/\hbar)*(1 + O(\hbar)), then B is the
         % exponential suppression of the tunneling rate
+        
+        if nargin < 7, actionForm = 2; end
         
         Y = mat2cell(Y,size(Y,1),ones(1,size(Y,2)));
         
@@ -934,7 +837,7 @@ methods (Static)
         % find_action_4D won't bother integrating the Lagrangian.
         
         w = abs(kappa/3*V(phi_metaMin))^0.5;
-        if w == 0
+        if w == 0 || no_gravity
             % Integrate inside the full support of the bubble.
             R_bkgd     = R(end);
             Rho_bkgd   = R(end);
@@ -959,8 +862,8 @@ methods (Static)
         
         %% Compute tunneling rate exponential piece
         
-        S_bubble = FalseVacuumInstanton.find_action_4D_static(alpha,kappa,V,R,Y);
-        S_bkgd   = FalseVacuumInstanton.find_action_4D_static(alpha,kappa,V,R_bkgd,Y_bkgd);
+        S_bubble = FalseVacuumInstanton.find_action_4D_static(alpha,kappa,V,R,Y,actionForm);
+        S_bkgd   = FalseVacuumInstanton.find_action_4D_static(alpha,kappa,V,R_bkgd,Y_bkgd,actionForm);
         
         B = S_bubble-S_bkgd;
         
@@ -969,7 +872,7 @@ methods (Static)
     function S = find_action_4D_static(alpha,kappa,V,R,Y,actionForm)
         
         if nargin < 4
-            actionForm = 1;
+            actionForm = 2;
         end
         
         [Phi,dPhi,Rho,dRho,d2Rho] = deal(Y{:});
@@ -980,7 +883,7 @@ methods (Static)
         w_int = abs(kappa/3*V(Phi(1)))^0.5;
         
         % Integrate over the bubble interior
-        if w_int == 0
+        if w_int == 0 || actionForm == 0
             
             % field part    : integrate 2*pi^2*r^3*V dr from 0 to R
             volume = pi^2*R(1)^4/2;
@@ -1002,7 +905,7 @@ methods (Static)
             
         end
         
-        if V(Phi(end)) > 0
+        if V(Phi(end)) > 0 || actionForm ~= 0
             
             % Integrate over the finite volume outside the bubble
             w_ext = abs(kappa/3*V(Phi(end)))^0.5;

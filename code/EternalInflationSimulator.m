@@ -132,13 +132,12 @@ methods (Access = public)
                         
                         % Check for slow roll at peak (assume \epsilon_V << 1)
                         if abs(f{3}(xpeak)/(f{1}(xpeak)-V_offset/Mv^4)/Mh^2)/(8*pi/obj.m_Pl^2) > 1
-                            data_out(2) = 3; % Start wherever slow roll starts
+                            % Require slow roll at the peak for Measure A
+                            data_out(2) = 3;
                             break
-%                             phistart = obj.find_phistart(xpeak,@(x) f{1}(x)-V_offset/Mv^4,...
-%                                 @(x) f{2}(x)/Mh,@(x) f{3}(x)/Mh^2,Mh,obj.m_Pl)*Mh;
-                        else
-                            phistart = xpeak*Mh; % Start at maximum
                         end
+                        
+                        phistart = xpeak*Mh; % Start at maximum
                         
                         Vstart  = []; Vpstart = [];
                         
@@ -150,7 +149,7 @@ methods (Access = public)
                         
                     case 'C'
                         
-                        if data_out(2) == 0
+                        if data_out(2) == 0 && V_offset == 0
                             phistart = phiinit; % phiinit already inflates
                         elseif (f{2}(phiinit/Mh)/(f{1}(phiinit/Mh)-V_offset/Mv^4)/Mh)^2/(16*pi/obj.m_Pl^2) < 1 && ...
                                 abs(f{3}(phiinit/Mh)/(f{1}(phiinit/Mh)-V_offset/Mv^4)/Mh^2)/(8*pi/obj.m_Pl^2) < 1
@@ -213,10 +212,10 @@ methods (Access = public)
                         
                         data_out(5)  = max(0,data_out(5))  || flag_fv_eternal;   % Any false-vacuum eternal inflation?
                         data_out(18) = max(0,data_out(18)) || flag_hawking_moss; % Any Hawking-Moss instanton?
-                        data_out(6)  = min(data_out(6),log_tunnel_rate);         % Smallest tunneling rate
                         if ~(data_out(6) <= log_tunnel_rate)
                             data_out(19) = V(phi(i_tunnel,6))/obj.m_Pl^4;        % Energy of the false vacuum
                         end
+                        data_out(6)  = min(data_out(6),log_tunnel_rate);         % Smallest tunneling rate
                         
                         if flag_hawking_moss
                             phiinit = phitunnel + 1i*sign(phitunnel-phi(i_tunnel,6));
@@ -240,7 +239,6 @@ methods (Access = public)
                     
                     if isnan(phistart)
                         % SRA never found to be valid, even near minimum
-                        % V(phistop) must be close to zero
                         status(it,1) = 4;
                         Ntotal(it,1) = NaN;
                         if i_tunnel == 0
@@ -455,7 +453,7 @@ methods (Access = protected)
         if nargin < 9 || isempty(Vfalse),      Vfalse = V(phifv);   end
         
         hbar = 1;
-        log_stable_rate_cutoff = -1e7;
+        log_stable_rate_cutoff = -inf; %-1e7;
         
         phitunnel = nan(1,2);
         flag_hm   = false(1,2);
@@ -522,10 +520,10 @@ methods (Access = protected)
         
         % Handle no-tunneling case
         if all(isnan(phitunnel))
-            phitunnel = NaN;
+            phitunnel       = NaN;
             log_tunnel_rate = NaN;
-            flag_hm = false;
-            flag_eternal = false;
+            flag_hm         = false;
+            flag_eternal    = false;
             return
         end
         
@@ -557,11 +555,11 @@ methods (Access = protected)
         numStochEpochs = nan; % Number of intervals of eternal inflation
         NSinceStoch    = nan; % Number of e-foldings between SEI breakdown and exit scale
         
-        flag_starts_at_peak = (imag(phi(2)) ~= 0);
-        
         phistart = phi(3);
         phiexit  = phi(4);
         phiend   = phi(5);
+        
+        flag_starts_at_peak = (imag(phi(2)) ~= 0) && (phistart == real(phi(2)));
         
         phiscale = p.mh*obj.m_Pl;
         
@@ -665,12 +663,16 @@ methods (Access = protected)
         %% Screen phistart and phiend
         
         if off2on(1) == 0 % SEI is satisfied at phistart
-            % Require that SEI ends when inflation ends, if not sooner
+            % Add phistart as the past boundary of the first interval
             phibreak = [phistart phibreak];
             off2on   = [1        off2on];
             if flag_starts_at_peak && (kappa*V(phistart))^(3/2) < 10.25 * Vpp(phistart)*phistart
+                % Second derivative check fails around potential peak
+                % Remove the bout of SEI contiguous with phistart
                 phibreak = phibreak(min(3,end+1):end);
                 off2on   = off2on(min(3,end+1):end);
+                % TODO: Find where the 2DC becomes valid and determine if
+                % it invalidates the whole epoch near the maximum
                 if isempty(phibreak)
                     return
                 end

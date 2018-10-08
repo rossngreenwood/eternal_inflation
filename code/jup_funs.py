@@ -60,7 +60,7 @@ def getBinnedFractions(run_ids,binParam,bins,rho_thres=0.02):
 
         for ind in range(0,len(bins)+1):
 
-            ilog = np.logical_and(ibin == ind,data['rho_Lambda'] == 0)
+            ilog = (ibin == ind)
             if not any(ilog):
                 continue
 
@@ -98,6 +98,110 @@ def getBinnedFractions(run_ids,binParam,bins,rho_thres=0.02):
             fractions['Q'][j]           /= fractions['len'][j]
             fractions['r'][j]           /= fractions['len'][j]
             fractions['ns'][j]          /= fractions['len'][j]
+            fractions['alpha'][j]       /= fractions['len'][j]
+            fractions['rho_Lambda'][j]  /= fractions['len'][j]
+            fractions['lgOk'][j]        /= fractions['len'][j]
+
+    print(' Done')
+
+    return fractions
+
+def massBin2D(run_ids):
+
+    if osname == 'nt':
+        data_dir = 'C:/Users/Ross/Documents/data/'
+    else:
+        data_dir = '~/eternal_inflation/data/'
+
+    data_names = ['record_flag','status','N','rho_offset','flag_fv_eternal', \
+                'log_tunnel_rate', 'flag_hawking_moss','rho_false', \
+                'numStochEpochs', 'NSinceStoch','numTopolEpochs','Q','r', \
+                'n_s','alpha','n_t','dlgrho','lgOk','rho_Lambda'];
+    meta_names = ['n_iter','cores','mv','mh','m_Pl','kmax','gamma','measure', \
+                'n_tunnel_max','lambdascreen', 'rho_Lambda_thres','fixQ', \
+                'Nafter','seed','n_recycle'];
+    frac_names = ['mv','mh','len','n_iter','success','Q','r','ns','alpha', \
+                'rho_Lambda','lgOk', 'stoch1','stoch2','stochAtExit','fv', \
+                'fv_hm','top','wildcard']
+
+    n_run = len(run_ids)
+
+    print('Loading data...         |')
+    count = 0
+
+    fractions = pd.DataFrame(np.zeros([n_run,len(frac_names)]), columns=frac_names)
+
+    for i in range(0,n_run):
+
+        if osname == 'nt':
+            fname = data_dir + 'outfile_t_' + ('%04d' % run_ids[i]) + '.txt'
+        else:
+            fname = data_dir + 'out_' + ('%04d' % run_ids[i]) + '/outfile_t_' + ('%04d' % run_ids[i]) + '.txt'
+
+        try:
+            meta = pd.read_csv(fname,header=None,names=meta_names,nrows=1)
+        except:
+            continue
+
+        if meta.shape[0] == 0:
+            continue
+
+        if i == 0 and meta.shape[0] > 0:
+            print('Measure: %s' % meta['measure'][0])
+
+        if np.floor(i/(n_run/25)) >= count:
+            count = count + 1
+            stdout.write('#')
+
+        data = pd.read_csv(fname, skiprows=2,header=None,names=data_names)
+
+        ind = i
+        fractions['mv'][ind] = np.round(meta['mv'][0],decimals=5)
+        fractions['mh'][ind] = np.round(meta['mh'][0],decimals=5)
+
+        fractions['n_iter'][ind]      += meta['n_iter'][0]
+
+        if data.shape[0] == 0:
+            continue
+
+        fractions['len'][ind]         += data.shape[0]
+        fractions['success'][ind]     += data.shape[0]
+
+        # Fractions for observables
+        fractions['Q'][ind]           += sum(np.logical_and(data['Q'] > np.sqrt(np.exp(3.089-2.5*0.036)/(1e10)), \
+                                          data['Q'] < np.sqrt(np.exp(3.089+2.5*0.036)/(1e10))))
+        fractions['r'][ind]           += sum(data['r'] < 0.114)
+        fractions['ns'][ind]          += sum(np.logical_and(data['n_s'] > 0.9655-0.0062, \
+                                          data['n_s'] < 0.9655+0.0062))
+        fractions['alpha'][ind]       += sum(np.logical_and(data['alpha'] > -0.0057-0.0071, \
+                                                            data['alpha'] <  0.0084+0.0082))
+        fractions['rho_Lambda'][ind]  += sum(data['rho_Lambda'] == 0)
+        fractions['lgOk'][ind]        += sum(data['lgOk'] < -2)
+
+        # Fractions for eternal inflation
+        fractions['stoch1'][ind]      += sum(data['numStochEpochs'] == 1)
+        fractions['stoch2'][ind]      += sum(data['numStochEpochs'] == 2)
+        fractions['stochAtExit'][ind] += sum(data['NSinceStoch'] == 0)
+        fractions['fv'][ind]          += sum(data['flag_fv_eternal'] > 0)
+        fractions['top'][ind]         += sum(data['numTopolEpochs'] > 1)
+        fractions['fv_hm'][ind]       += sum(data['flag_hawking_moss'] > 0)
+
+    # Divide by total counts to obtain fractions
+    print(fractions.shape)
+    for j in fractions.index:
+        if fractions['n_iter'][j] > 0:
+            fractions['success'][j]     /= fractions['n_iter'][j]
+        if fractions['len'][j] > 0:
+            fractions['stoch1'][j]      /= fractions['len'][j]
+            fractions['stoch2'][j]      /= fractions['len'][j]
+            fractions['stochAtExit'][j] /= fractions['len'][j]
+            fractions['fv'][j]          /= fractions['len'][j]
+            fractions['fv_hm'][j]       /= fractions['len'][j]
+            fractions['wildcard'][j]    /= fractions['len'][j]
+            fractions['Q'][j]           /= fractions['len'][j]
+            fractions['r'][j]           /= fractions['len'][j]
+            fractions['ns'][j]          /= fractions['len'][j]
+            fractions['top'][j]         /= fractions['len'][j]
             fractions['alpha'][j]       /= fractions['len'][j]
             fractions['rho_Lambda'][j]  /= fractions['len'][j]
             fractions['lgOk'][j]        /= fractions['len'][j]
@@ -228,7 +332,7 @@ def getMarginalFractions(run_ids,model=False,rho_thres=0.02):
 
     return df
 
-def getModelFractions(run_ids,new_output=True,rho_thres=0.02):
+def getModelFractions_old(run_ids,new_output=True,rho_thres=0.02):
 
     if osname == 'nt':
         data_dir = 'C:/Users/Ross/Documents/data/'

@@ -525,7 +525,7 @@ end
 
 methods
     
-    function [R,Y,useThinWall] = find_profile(self,xguess,xtol,phitol,thinCutoff,B_cutoff,rmin,rmax)
+    function [R,Y,useThinWall] = find_profile(self,xguess,xtol,phitol,thinCutoff,rmin,rmax)
         % Calculate the bubble profile by iteratively over/undershooting.
         % 
         % This is very similar to :method:`SingleFieldInstanton.find_profile`,
@@ -555,7 +555,6 @@ methods
         if nargin < 3, xtol             = 1e-4; end
         if nargin < 4, phitol           = 1e-4; end
         if nargin < 5, thinCutoff       = 1e-2; end
-        if nargin < 6, B_cutoff         = Inf;  end
         if nargin < 6, rmin             = 1e-4; end
         if nargin < 7, rmax             = 1e+4; end
         
@@ -589,8 +588,6 @@ methods
         
         %% Repeat profile integration until it converges
         
-        ctype_last = ''; dphi_last = Inf;
-        
         useThinWall = false;
         
         maxloops = 100;
@@ -621,23 +618,6 @@ methods
             % Integrate profile
             [R,Y,ctype] = self.integrate_profile(r0,y0,epsabs,rmax);
             
-            %% Check for Hawking-Moss instanton
-            
-%             if xmin == xbar && ...
-%                     strcmp(ctype_last,'overshoot') && ...
-%                     abs(dphi_last) < abs(Y(end,2))-epsabs(2)
-%                 % Passed minimum of abs(dphi) \rvert_{phi = phi_metaMin}
-%                 % There is no CDL bubble; the only solution is the Hawking-
-%                 % Moss instanton that sits on top of the barrier forever.
-%                 w_top = abs(self.kappa/3*self.V(self.phi_bar_top))^0.5;
-%                 R = pi/w_top/2;
-%                 Y = [self.phi_bar_top,0,1/w_top,0,-w_top];
-%                 useThinWall = false;
-%                 return
-%             end
-            
-            ctype_last = ctype; dphi_last = Y(end,2);
-            
             %% Check for overshoot, undershoot
             
             switch ctype
@@ -650,17 +630,13 @@ methods
                     else
                         x = .5*(xmin+xmax);
                     end
-%                     xx = linspace(0e3,2e3,1001);
-%                     plot(xx,self.V(xx)); hold on;
-%                     plot(exp(-x)*delta_phi+self.phi_absMin,self.V(exp(-x)*delta_phi+self.phi_absMin),'o'); hold off;
-%                     pause(0.5);
                 case 'overshoot' % x is too high
                     xmax = x;
                     x = .5*(xmin+xmax);
             end
             
             % Close enough; don't wait for convergence
-            if (xmax-xmin) < xtol
+            if abs(xmax-xmin) < xtol
                 if abs(xmax-xtop) < xtol
                     % Passed minimum of abs(dphi) \rvert_{phi = phi_metaMin}
                     % There is no CDL bubble; the only solution is the Hawking-
@@ -674,15 +650,6 @@ methods
                 break
             end
             
-%             if ~isinf(self.B_cutoff)
-%                 B = self.find_tunneling_suppression(R,Y);
-%                 disp(['B = ' num2str(B)]);
-%                 if B > B_cutoff
-%                     Y(1,1) = nan;
-%                     return
-%                 end
-%             end
-             
         end
         
         % Add d^2Rho/dr^2 to the profile
@@ -717,13 +684,13 @@ methods
         % exponential suppression of the tunneling rate
         
         if nargin < 4
-            B = find_tunneling_suppression_static(self.alpha,self.kappa,...
+            B = self.find_tunneling_suppression_static(self.alpha,self.kappa,...
                 self.V,self.phi_metaMin,R,Y);
         else
             if self.no_gravity
                 actionForm = 0;
             end
-            B = find_tunneling_suppression_static(self.alpha,self.kappa,...
+            B = self.find_tunneling_suppression_static(self.alpha,self.kappa,...
                 self.V,self.phi_metaMin,R,Y,actionForm);
         end
         
@@ -837,7 +804,7 @@ methods (Static)
         % find_action_4D won't bother integrating the Lagrangian.
         
         w = abs(kappa/3*V(phi_metaMin))^0.5;
-        if w == 0 || no_gravity
+        if w == 0 || actionForm == 0
             % Integrate inside the full support of the bubble.
             R_bkgd     = R(end);
             Rho_bkgd   = R(end);
@@ -878,7 +845,6 @@ methods (Static)
         [Phi,dPhi,Rho,dRho,d2Rho] = deal(Y{:});
         
         %% Compute volume terms for bubble interior/exterior (assumes 4D)
-        % Generalize to d dimensions?
         
         w_int = abs(kappa/3*V(Phi(1)))^0.5;
         
@@ -918,11 +884,17 @@ methods (Static)
         
         %% Integrate Lagrangian for bubble wall
         
+        % Hawking-Moss action consists only of volume term
         if isscalar(R), return, end
         
         % Find the area of an n-sphere (alpha=n):
         d = alpha + 1; % Number of dimensions in the integration
         area = Rho.^alpha * 2*pi^(d*.5)/gamma(d*.5);
+        
+        dPhi = dPhi(:).';
+        Phi  = Phi(:).';
+        Rho  = Rho(:).';
+        dRho = dRho(:).';
         
         % Select Lagrangian
         switch actionForm
@@ -946,545 +918,10 @@ methods (Static)
         
         %% Compute action for bubble wall
         
-        S = S + trapz(R,area.*lagr) + boundary;
+        S = S + trapz(R,area.*lagr(:)) + boundary;
         
     end
     
 end
 
 end
-
-%% Scratch
-
-% % %% Utilities
-% % 
-% % methods (Access = protected)
-% %     
-% %     function dV_phi = dV_near_min(self,delta_phi,phi_min)
-% %         % Calculates `dV/dphi` at ``phi = phi_absMin + delta_phi``.
-% %         
-% %         if nargin < 3, phi_min = self.phi_absMin; end
-% %         
-% %         phi = phi_min + delta_phi;
-% %         dV_phi = self.dV(phi);
-% %         
-% %     end
-% %     
-% % end
-
-% % function f = cubicInterpFunction(y0,dy0,y1,dy1)
-% %     
-% %     y3 = y1;
-% %     y1 = y0 + dy0/3.0;
-% %     y2 = y3 - dy1/3.0;
-% %     
-% %     f = @(t) feval(@(mt) y0*mt.^3 + 3*y1*mt.*mt.*t + 3*y2*mt.*t.*t + y3*t.^3,1-t);
-% %     
-% % end
-
-% %     function S = find_action_without_gravity(self,R,Y)
-% %         % Calculate the Euclidean action for the instanton:
-% %         % 
-% %         % .. math::
-% %         %   S = \int [(d\phi/dr)^2 + V(\phi)] r^\alpha dr d\Omega_\alpha
-% %         
-% %         Y = mat2cell(Y,ones(1,size(Y,1)),size(Y,2));
-% %         [Phi,dPhi,~,~,~] = deal(Y{:});
-% %         
-% %         % Find the area of an n-sphere (alpha=n):
-% %         d = self.alpha + 1; % Number of dimensions in the integration
-% %         area = R.^self.alpha * 2*pi^(d*.5)/gamma(d*.5);
-% %         
-% %         % And integrate the profile
-% %         lagr = 0.5 * dPhi.^2 + self.V(Phi) - self.V(self.phi_metaMin);
-% %         S = trapz(R,lagr.*area);
-% %         
-% %         % Find the bulk term in the bubble interior
-% %         % Assume field is uniform inside the bubble
-% %         volume = R(1)^d * pi^(d*.5)/gamma(d*.5 + 1);
-% %         S = S + volume * (self.V(Phi(1)) - self.V(self.phi_metaMin));
-% %         
-% %     end
-% %     
-% %     function B = find_action_old(self,R,Y)
-% %         % Calculate the Euclidean action for the instanton:
-% %         % 
-% %         % .. math::
-% %         %   S = \int [(d\phi/dr)^2 + V(\phi)] r^\alpha dr d\Omega_\alpha
-% %         
-% %         % f[r_?NumberQ] := - r^(rDim-1) profile[r] . (gradient[profile[r]]-gradient[falseVacuum]);
-% %         % Pi^(rDim/2)/Gamma[1+rDim/2] NIntegrate[f[r], Join[{r, 0}, ri, {Infinity}],
-% %         
-% %         if self.no_gravity
-% %             B = self.find_action_without_gravity(R,Y);
-% %             return
-% %         end
-% %         
-% %         Y = mat2cell(Y,ones(1,size(Y,1)),size(Y,2));
-% %         [Phi,dPhi,Rho,dRho,d2Rho] = deal(Y{:});
-% %         
-% %         % Find the area of an n-sphere (alpha=n):
-% %         d = self.alpha + 1; % Number of dimensions in the integration
-% %         area = Rho.^self.alpha * 2*pi^(d*.5)/gamma(d*.5);
-% %         
-% %         actionForm = 0;
-% %         %   0   Full Euclidean EH action
-% %         %   1   After integration by parts
-% %         %   2   Assuming on-shell GR
-% %         
-% %         %% Action for bubble
-% %         
-% %         switch actionForm
-% %             case 0
-% %                 lagr = 0.5*dPhi.^2 + self.V(Phi) + 1./self.kappa.*(d2Rho./Rho + (dRho./Rho).^2 - Rho.^(-2));
-% %             case 1
-% %                 lagr = 0.5*dPhi.^2 + self.V(Phi) - 1./self.kappa.*((dRho./Rho).^2 + Rho.^(-2));
-% %             case 2
-% %                 lagr = 2*self.V(Phi) - 2./self.kappa./Rho.^2;
-% %         end
-% %         S_bubble = trapz(R,area.*lagr);
-% %         
-% %         if actionForm > 0
-% %             S_bubble = S_bubble + 2*pi^2/self.kappa*(Rho(end)^2*dRho(end));
-% %         end
-% %         
-% %         w = abs(self.kappa*self.V(Phi(1)))^0.5;
-% %         
-% %         % Add volume term for bubble interior
-% %         if self.V(Phi(1)) > 0
-% %             % field part    : integrate 2*pi^2*sin(w*r)^3/w^3*V dr from 0 to R
-% %             % geometry part : integrate 2*pi^2/k*(-sin(w*r)^3/w + sin(w*r)*cos(w*r)^2/w - sin(w*r)/w) dr from 0 to R
-% %             volume = 8*pi^2/3/w^4*sin(R(1)*w/2)^4*(cos(R(1)*w)+2);
-% %             S_bubble = S_bubble + volume*(2*self.V(Phi(1))) - ...
-% %                 16*pi^2*sin(R(1)*w/2)^4*(cos(R(1)*w)+2)/3/self.kappa/w^2;
-% %         else
-% %             % field part    : integrate 2*pi^2*sinh(w*r)^3/w^3*V dr from 0 to R
-% %             % geometry part : integrate 2*pi^2/k*(sinh(w*r)^3/w + sinh(w*r)*cosh(w*r)^2/w - sinh(w*r)/w) dr from 0 to R
-% %         end
-% %         
-% %         %% Action for false vacuum background
-% %         
-% %         % Get Rho(R) in the case of uniform false vacuum
-% %         w = abs(self.kappa*self.V(self.phi_metaMin))^0.5;
-% %         if w == 0
-% %             Rho_metaMin = R;
-% %         elseif self.V(self.phi_metaMin) > 0
-% %             Rho_metaMin = sin(R*w)/w;
-% %             dRho_metaMin = cos(R*w);
-% %             d2Rho_metaMin = -sin(R*w)*w;
-% %         else
-% %             Rho_metaMin = sinh(R*w)/w;
-% %             dRho_metaMin = cosh(R*w);
-% %             d2Rho_metaMin = sinh(R*w)*w;
-% %         end
-% %         area_metaMin = Rho_metaMin.^self.alpha * 2*pi^(d*.5)/gamma(d*.5);
-% %         
-% %         switch actionForm
-% %             case 0
-% %                 lagr = self.V(self.phi_metaMin) + ...
-% %                     1./self.kappa.*(d2Rho_metaMin./Rho_metaMin + (dRho_metaMin./Rho_metaMin).^2 - Rho_metaMin.^(-2));
-% %             case 1
-% %                 lagr = self.V(self.phi_metaMin) - 1./self.kappa.*((dRho_metaMin./Rho_metaMin).^2 + Rho_metaMin.^(-2));
-% %             case 2
-% %                 lagr = 2*self.V(self.phi_metaMin) - 2./self.kappa./Rho_metaMin.^2;
-% %         end
-% %         S_metaMin = trapz(R,area_metaMin.*lagr);
-% %         
-% %         % Add the surface term
-% %         if actionForm > 0
-% %             S_metaMin = S_metaMin + 2*pi^2/self.kappa*(Rho_metaMin(end)^2*dRho_metaMin(end));
-% %         end
-% %         
-% %         % Add volume term for bubble interior
-% %         volume = 8*pi^2/3/w^4*sin(R(1)*w/2)^4*(cos(R(1)*w)+2);
-% %         S_metaMin = S_metaMin + volume*(2*self.V(self.phi_metaMin)) - ...
-% %             16*pi^2*sin(R(1)*w/2)^4*(cos(R(1)*w)+2)/3/self.kappa/w^2;
-% %         
-% %         %% Compute tunneling rate exponent
-% %         
-% %         B = S_bubble-S_metaMin;
-% %         
-% %     end
-% %     
-% %     function B = find_exponent(self,R,Y)
-% %         % Calculate the Euclidean action for the instanton:
-% %         % 
-% %         % .. math::
-% %         %   S = \int [(d\phi/dr)^2 + V(\phi)] r^\alpha dr d\Omega_\alpha
-% %         
-% %         % f[r_?NumberQ] := - r^(rDim-1) profile[r] . (gradient[profile[r]]-gradient[falseVacuum]);
-% %         % Pi^(rDim/2)/Gamma[1+rDim/2] NIntegrate[f[r], Join[{r, 0}, ri, {Infinity}],
-% %         
-% %         Y = mat2cell(Y,ones(1,size(Y,1)),size(Y,2));
-% %         
-% %         %% Get profile for false vacuum background
-% %         
-% %         Phi_metaMin  = self.phi_metaMin*ones(size(R));
-% %         dPhi_metaMin = zeros(size(R));
-% %         
-% %         % Get Rho(R) in the case of uniform false vacuum
-% %         w = abs(self.kappa*self.V(self.phi_metaMin))^0.5;
-% %         if w == 0 || self.no_gravity
-% %             Rho_metaMin   = R;
-% %             dRho_metaMin  = ones(size(R));
-% %             d2Rho_metaMin = zeros(size(R));
-% %         elseif self.V(self.phi_metaMin) > 0
-% %             Rho_metaMin   = sin(R*w)/w;
-% %             dRho_metaMin  = cos(R*w);
-% %             d2Rho_metaMin = -sin(R*w)*w;
-% %         else
-% %             Rho_metaMin   = sinh(R*w)/w;
-% %             dRho_metaMin  = cosh(R*w);
-% %             d2Rho_metaMin = sinh(R*w)*w;
-% %         end
-% %         
-% %         Y_metaMin = {Phi_metaMin,dPhi_metaMin,Rho_metaMin,dRho_metaMin,d2Rho_metaMin};
-% %         
-% %         %% Compute tunneling rate exponent
-% %         
-% %         S_bubble  = self.find_action_4D(R,Y);
-% %         S_metaMin = self.find_action_4D(R,Y_metaMin);
-% %         
-% %         B = S_bubble-S_metaMin;
-% %         
-% %     end
-    
-
-
-% %     function [r,y,convergence_type] = integrate_profile_old(self,r0,y0,dr0,epsabs,drmin,rmax)
-% %         % Integrate the bubble wall equation
-% %         % 
-% %         % This works the same basic way as when there is no gravity, except
-% %         % now the overshoot/undershoot conditions are a little bit more
-% %         % complicated. The solution will overshoot if at any point `rho(r)
-% %         % = 0` for `r > 0` (indicating that the bubble has wrapped around
-% %         % to the anti-podal point of de Sitter space), unless `dphi/dr` is
-% %         % also zero.
-% %         
-% %         dr = dr0;
-% %         
-% %         % dY is the ODE that we use
-% %         dY = @(y,r) self.equation_of_motion(y,r);
-% %         dydr0 = dY(y0,r0);
-% %         
-% %         ysign = sign(y0(1)-self.phi_metaMin); % positive means we're heading down, negative means heading up.
-% %         rmax = rmax + r0;
-% %         
-% %         while true
-% %             
-% %             % Perform integration step
-% %             options = odeset(...
-% %                 'Jacobian', @(t,y) self.eom_jacobian(t,y),...
-% %                 'Events',   @(t,y) self.myEvent(t,y,epsabs,rmax,ysign) );
-% %             [r1,y1,re,ye,ie] = ode23s(@(r,y) dY(y,r).',[r0,r0+2],y0.',options);
-% %             
-% % %             if any(diff(r1) <= drmin/10)
-% % %             disp(r1(end))
-% %             if r1 == r0
-% %                 drnext = 0.2*dr;
-% % %                 ur = r1([true;diff(r1)/drmin > 10]);
-% % %                 drnext = ur(end-1)-ur(1);
-% % %                 drnext = min(y1(end,1)./y1(end,2));
-% %                 dr = drnext;
-% %                 continue
-% %             else
-% %                 drnext = 1.5*dr;
-% % %                 drnext = min(y1(end,1)./y1(end,2));
-% %             end
-% %             
-% %             r1 = r1(end,:);
-% %             y1 = y1(end,:);
-% %             
-% %             dydr1 = dY(y1,r1);
-% %             
-% %             phi1 = y1(1); dphi1 = y1(2);
-% %             rho1 = y1(3); drho1 = y1(4);
-% %             
-% %             % Check for errors
-% %             if r1 > rmax
-% %                 error('IntegrationError: r > rmax');
-% %             elseif dr < drmin
-% %                 % We need to check to see if we're at rho ~ 0. 
-% %                 % If we are, then the equations are singular.
-% %                 % But, it's a perfectly valid solution if dphi goes to 0 faster.
-% %                 if drho1 < 0 && rho1 < 25*epsabs(3)
-% %                     % linearly extrapolate to where rho = 0:
-% %                     dr = -rho1/drho1;
-% %                     r = r1 + dr;
-% %                     y = y1 + dydr1*dr;
-% %                     if abs(y(2)) < 3*epsabs(2)
-% %                         % phi derivative also goes to zero
-% %                         convergence_type = 'converged';
-% %                     else
-% %                         convergence_type = 'overshoot';
-% %                     end
-% %                     return
-% %                 else
-% %                     error('IntegrationError: dr < drmin'); % RNG
-% %                 end
-% %             end
-% %             
-% %             % Check for completion
-% %             if abs(phi1-self.phi_metaMin) < 3*epsabs(1) && abs(dphi1) < 3*epsabs(2)
-% %                 % Got close enough to meta-minimum with small enough dphi
-% %                 
-% %                 r = r1;
-% %                 y = y1;
-% %                 convergence_type = 'converged';
-% %                 break
-% %                 
-% %             elseif dphi1*ysign > 0
-% %                 % Didn't make it over the potential barrier, so the rate of
-% %                 % change of phi has changed sign
-% %                 
-% %                 % Interpolate to where dphi(r) = 0
-% %                 f = cubicInterpFunction(y0,dr*dydr0,y1,dr*dydr1);
-% %                 
-% %                 if feval(@(a) a(2), f(0).*f(1)) <= 0
-% %                     x = fzero(@(x) feval(@(a) a(2),f(x)),[0 1]);
-% %                     r = r0 + dr*x;
-% %                     y = f(x);
-% %                 else
-% %                     r = r0;
-% %                     y = nan(1,4);
-% %                 end
-% %                 
-% %                 convergence_type = 'undershoot';
-% %                 break
-% %                 
-% %             elseif (phi1-self.phi_metaMin)*ysign < 0
-% %                 % Passed meta-minimum without stopping
-% %                 
-% %                 % Interpolate to where phi(r) = phi_metaMin
-% %                 f = cubicInterpFunction(y0,dr*dydr0,y1,dr*dydr1);
-% % 
-% %                 if feval(@(a) a(1), (f(0)-self.phi_metaMin).*(f(1)-self.phi_metaMin)) < 1
-% %                     x = fzero(@(x) feval(@(a) a(1),f(x))-self.phi_metaMin,[0,1]);
-% %                     r = r0 + dr*x;
-% %                     y = f(x);
-% %                 else
-% %                     r = r0;
-% %                     y = nan(1,4);
-% %                 end
-% %                 
-% %                 convergence_type = 'overshoot';
-% %                 break
-% %                 
-% %             end
-% %             
-% %             % Advance the integration variables
-% %             [r0,y0,dydr0] = deal(r1,y1,dydr1);
-% %             dr = drnext;
-% %             
-% %         end
-% %         
-% %         % Check convergence for a second time. 
-% %         % The extrapolation in overshoot/undershoot might have gotten us within
-% %         % the acceptable error.
-% %         if all(abs(y(1:2) - [self.phi_metaMin,0]) < 3*epsabs(1:2))
-% %             convergence_type = 'converged';
-% %         end
-% %         
-% %     end
-    
-
-% %     function [R,Y,Rerr] = integrate_and_save_profile(self,R,y0,dr,drmin)
-% %         % Integrate the bubble profile, saving the output in an array.
-% %         
-% %         N = length(R); % Number of points
-% %         
-% %         r0 = R(1); % Initial radius
-% %         
-% %         % Field values [phi(R) dphi(R)]
-% %         Y = zeros(N,length(y0));
-% %         Y(1,:) = y0;
-% %         
-% %         % dY is the ODE that we use
-% %         dY = @(y,r) self.equation_of_motion(y,r);
-% %         dydr0 = dY(y0,r0);
-% %         
-% %         Rerr = NaN;
-% %         
-% %         i = 2;
-% %         while i <= N
-% %             
-% %             % Perform integration step
-% %             [r1,y1] = ode15s(@(r,y) dY(y,r).',[r0,r0+0.5*dr,r0+dr],y0.');
-% %             
-% %             if dr >= drmin
-% %                 
-% %                 if r1 == r0
-% %                     drnext = 0.2*dr;
-% %                     dr = drnext;
-% %                     continue
-% %                 else
-% %                     drnext = 1.2*dr;
-% %                 end
-% %                 
-% %                 r1 = r1(end,:);
-% %                 y1 = y1(end,:);
-% %                 
-% %             else
-% %                 
-% %                 y1 = y0 + (y1(end,:)-y0)*drmin/dr;
-% %                 dr = drmin;
-% %                 drnext = drmin;
-% %                 r1 = r1(end,:);
-% %                 if isnan(Rerr)
-% %                     Rerr = r1;
-% %                 end
-% %                 
-% %             end
-% %             
-% %             dydr1 = dY(y1,r1);
-% %             
-% %             % Fill the arrays, if necessary
-% %             % If this integration step took us beyond the next radius to
-% %             % process, then fill in that value by interpolating between the
-% %             % previous result and the current result.
-% %             if r0 < R(i) && R(i) <= r1
-% %                 f = cubicInterpFunction(y0, dr*dydr0, y1, dr*dydr1);
-% %                 while (i <= N && r0 < R(i) && R(i) <= r1)
-% %                     x = (R(i)-r0)/dr;
-% %                     Y(i,:) = f(x);
-% %                     i = i + 1;
-% %                 end
-% %             end
-% %             
-% %             % Advance the integration variables
-% %             [r0,y0,dydr0] = deal(r1,y1,dydr1);
-% %             dr = drnext;
-% %             
-% %         end
-% %         
-% %         % Add d2Rho to output (for computing action)
-% %         dYdR  = dY(Y,R);
-% %         d2Rho = dYdR(:,end);
-% %         Y = [Y d2Rho].';
-% %         
-% %     end
-    
-
-% %         if self.useThinWallApproximation
-% %             
-% %             %% Get bubble wall tension
-% %             
-% %             [Phi,~,~,~,~] = deal(Y{:});
-% %             
-% %             % Bubble radius (thin wall approximation?)
-% %             R0 = R(1);
-% %             
-% %             % Calculate surface tension of bubble wall
-% %             % M = \int_{phi_0}^{phi_r} 2 \sqrt{V(phi) - V(phi_fv)} d\phi
-% %             x = linspace(min(Phi),max(Phi),100);
-% %             x = linspace(self.V(self.phi_metaMin),self.V(self.phi_absMin),100);
-% %             sig = trapz(x,sqrt(2*(self.V(x)-self.V(self.phi_metaMin))));
-% %             
-% %             H = abs(self.kappa/3*self.V(self.phi_metaMin))^-0.5;
-% %             
-% %             %% Use thin wall approximation to compute bubble action
-% %             
-% %             DV = abs(self.V(self.phi_metaMin) - self.V(self.phi_absMin));
-% %             R0 = (3*sig)/sqrt(9*H^2*sig^2 + DV^2);
-% %             
-% %             x = 6*pi*sig^2/DV; 
-% %             y = DV/(self.V(self.phi_metaMin)+self.V(Phi(1)));
-% %             z = sqrt(1 + 2*x*y + x^2);
-% %             
-% %             S = 27*pi^2*sig*4/DV^3*(...
-% %                 ( (1 + x*y) - z ) / ...
-% %                 ( x^2*(y^2 - 1)*z ) );
-% %             
-% % %             S2 = 2*pi^2/3*H^(-4)*(-2*DV + ...
-% % %                 (9*H^2*sig^2 + 2*DV^2)/sqrt(9*H^2*sig^2 + DV^2) );
-% %             
-% %             %% Compute pre-factor
-% %             
-% %             % Calculate pre-factor sans Hubble factor exp(3Ht)
-% %             % exp(zeta_R'(-2)) = exp(-zeta_R(3)/(2*pi)^2) = 0.97001
-% %             lambda = -(S + 3/8/self.V(self.phi_metaMin)) + log(4*0.97001*R0^2*sig^2);
-% %             
-% %         else
-            
-% %     function [R_int,Y_int] = make_interior_points(self,R,delta_phi0,max_interior_pts,rmin)
-% %         % Figure out how this works
-% %         %
-% %         % Usage:
-% %         %
-% %         % [R_int,Y_int] = make_interior_points(self,R,delta_phi0,max_interior_pts,rmin);
-% %         % 
-% %         % % Add internal points to profile
-% %         % R = horzcat(fliplr(R_int),R);
-% %         % Y = horzcat(fliplr(Y_int),Y);
-% %         
-% %         if nargin < 4 || isempty(max_interior_pts)
-% %             max_interior_pts = floor(sqrt(length(R)));
-% %         elseif max_interior_pts == 0
-% %             R_int = zeros(1,0);
-% %             Y_int = zeros(5,0);
-% %             return
-% %         end
-% %         
-% %         % Select grid of radii
-% %         dx0 = R(2)-R(1);
-% %         if R(1) / dx0 <= max_interior_pts
-% %             n = ceil(R(1)/dx0);
-% %             R_int = linspace(0,R(1),n+1);
-% %             R_int = R_int(end:-1:1);
-% %         else
-% %             n = max_interior_pts;
-% %             % R(1) = dx0 * (n + a*n*(n+1)/2)
-% %             a = (R(1)/dx0 - n) * 2/(n*(n+1));
-% %             N = n:-1:1;
-% %             R_int = R(1) - dx0*(N + 0.5*a*N.*(N+1));
-% %             R_int(1) = 0.0; % enforce this exactly
-% %         end
-% %         
-% %         R_int = max(R_int,rmin);
-% %         
-% %         % Initial conditions in vicinity of bubble interior
-% %         Phi_int     = zeros(size(R_int));
-% %         Phi_int(1)  = self.phi_absMin + delta_phi0;
-% %         dPhi_int    = zeros(size(R_int));
-% %         dPhi_int(1) = 0;
-% %         
-% %         % Potential in vicinity of bubble interior
-% %         V0   = self.V(Phi_int(1));
-% %         dV0  = self.dV(Phi_int(1));
-% %         d2V0 = self.d2V(Phi_int(1));
-% %         
-% %         w = abs(self.kappa/3*V0)^0.5;
-% %         if w == 0
-% %             % No curvature
-% %             R_int2      = R_int;
-% %             Rho_int     = R_int;
-% %             dRho_int    = ones(size(R_int));
-% %             d2Rho_int   = zeros(size(R_int));
-% %         elseif V0 > 0
-% %             % Positive curvature
-% %             R_int2      = tan(w*R_int)/w;
-% %             Rho_int     = sin(w*R_int)/w;
-% %             dRho_int    = cos(w*R_int);
-% %             d2Rho_int   = -w*sin(w*R_int);
-% %         else
-% %             % Negative curvature
-% %             R_int2      = tanh(w*R_int)/w;
-% %             Rho_int     = sinh(w*R_int)/w;
-% %             dRho_int    = cosh(w*R_int);
-% %             d2Rho_int   = w*sinh(w*R_int);
-% %         end
-% %         
-% %         % Assume delta_phi0 is small, so the field in the bubble interior
-% %         % is close to the absolute minimum, and thus the potential can be
-% %         % approximated as quadratic, for which there is an exact solution
-% %         for i = 1:length(R_int)
-% %             [Phi_int(i),dPhi_int(i)] = self.exact_solution( ...
-% %                 R_int2(i),Phi_int(1),dV0,d2V0);
-% %         end
-% %         
-% %         Y_int = vertcat(Phi_int,dPhi_int,Rho_int,dRho_int,d2Rho_int);
-% %         
-% %     end
-    
-% %                         error('FalseVacuumInstanton:HawkingMoss',...
-% %                             'Found min of abs(dphi/dr); no tunneling solution available.');

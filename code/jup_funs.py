@@ -56,7 +56,10 @@ def getBinnedFractions(run_ids,binParam,bins,rho_thres=0.02):
         if data.shape[0] == 0:
             continue
 
-        ibin = np.digitize(data[binParam],bins)
+        if not binParam in ['mv','mh']:
+            ibin = np.digitize(data[binParam],bins)
+        else:
+            ibin = np.digitize(meta['mv'][0],bins)*np.ones((len(data),1))
 
         for ind in range(0,len(bins)+1):
 
@@ -168,8 +171,8 @@ def massBin2D(run_ids):
         fractions['success'][ind]     += data.shape[0]
 
         # Fractions for observables
-        fractions['Q'][ind]           += sum(np.logical_and(data['Q'] > np.sqrt(np.exp(3.089-2.5*0.036)/(1e10)), \
-                                          data['Q'] < np.sqrt(np.exp(3.089+2.5*0.036)/(1e10))))
+        fractions['Q'][ind]           += sum(np.logical_and(data['Q'] > np.sqrt(np.exp(3.089-0.036)/(1e10)), \
+                                          data['Q'] < np.sqrt(np.exp(3.089+0.036)/(1e10))))
         fractions['r'][ind]           += sum(data['r'] < 0.114)
         fractions['ns'][ind]          += sum(np.logical_and(data['n_s'] > 0.9655-0.0062, \
                                           data['n_s'] < 0.9655+0.0062))

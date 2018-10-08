@@ -302,6 +302,10 @@ methods (Access = public)
                 phi    = phi(1:last_valid,:);
                 Ntotal = Ntotal(1:last_valid);
                 
+                % Only false vacuum eternal if followed by enough inflation
+                data_out(5) = max(0,data_out(5)) && ...
+                    (last_valid > 1 && Ntotal(last_valid) > p.Nafter);
+                
                 if status(last_valid,1) == 4
                     break % No end of inflation
                 elseif ~(Ntotal(last_valid) > p.Nafter)
@@ -311,7 +315,7 @@ methods (Access = public)
                 %% Fill in gaps
                 
                 % Compute e-folds precisely if haven't already
-                if Ntotal(end) > 1.3*obj.parameters.Nafter
+                if isfinite(Ntotal(end)) && Ntotal(end) > 1.3*obj.parameters.Nafter
                     kappa = 8*pi/obj.m_Pl^2;
                     dlna_dphi = @(phi) (-kappa*V(phi)./Vp(phi));
                     Ntotal(end) = integral(dlna_dphi,phi(end,3),phi(end,5));
@@ -368,7 +372,7 @@ methods (Access = public)
             
             %% Record results
             
-            obj.write_output(record_flag,p.outfile,data_out);
+%             obj.write_output(record_flag,p.outfile,data_out);
             
         end % while
         
@@ -913,7 +917,7 @@ methods (Access = protected)
             
             phi_tol = abs(phifv(b)-near_minima(b))*1e-10;
             
-            phimin = phifv(b);
+            phimin = phipeak(b);
             phimax = near_minima(b);
             sgn = sign(phimax-phimin);
             
@@ -925,13 +929,16 @@ methods (Access = protected)
             phibar = 0.5*(phimin + phimax);
             phisep = abs(phimax-phimin);
             
+%             Vtarget = 0.05*V(near_minima(b)) + 0.95*V(phipeak(b));
+            Vtarget = V(phifv);
+            
             nbits = 5;
             ind = 1;
             while abs(phisep)*2^(1-ind) > abs(phi_tol)
                 if mod(ind,nbits-1) == 1
                     phisep = (phimax-phimin);
                     phi_range = (phimin + phisep*(2^-nbits)):(phisep*(2^-nbits)):(phimax - phisep*(2^-nbits));
-                    fun_vals = sgn*(Vfv(b)-V(phi_range));
+                    fun_vals = sgn*(Vtarget-V(phi_range));
                     ind = 1;
                     ii = 2^(nbits-1);
                 end
@@ -992,7 +999,8 @@ methods (Access = protected)
             elseif status_start == 0 && Ntotal >= obj.parameters.Nafter
                 % Tunneling basin is viable
                 any_viable = true; break
-            else
+            elseif abs(Vpp(phipeak(b))/V(phipeak(b)))/(kappa) < 1
+                % Second derivative slow roll conditions met at peak
                 
                 %% Pre-compute Hawking-Moss tunneling rate
                 %  Check if a Hawking-Moss transition can
@@ -1575,6 +1583,12 @@ methods
                         error('randstream must be an object of class RandStream.');
                     end
                     
+                case 'flag_screen_basin'
+                    if isscalar(val.flag_screen_basin)
+                        obj.parameters.flag_screen_basin = val.flag_screen_basin;
+                    else
+                        error('flag_screen_basin must be a scalar logical');
+                    end
             end
         end
     end
@@ -1595,11 +1609,11 @@ properties (SetAccess = protected)
         'measure',            'B',...   % Measure on initial conditions
         'n_tunnel_max',       1,...     % Max number of tunneling events to simulate
         'n_recycle',          4,...     % # of times to reuse same V(phi) with different phi0 value
-        'mv_offset_max',    0,...     % Threshold below which vacuum energy is considered "small"
+        'mv_offset_max',      0,...     % Threshold below which vacuum energy is considered "small"
         'outfile',            '',...    % Path to output text file
         'randstream',         [],...    % Object defining random number generator
         'cores',              1,...     % Number of parallel cores on which this is running
-        'flag_screen_basin',  true ...
+        'flag_screen_basin',  false ...
         );
     
     logfile

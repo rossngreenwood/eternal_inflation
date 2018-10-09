@@ -210,7 +210,7 @@ methods (Access = public)
                         
                         record_flag = 2;
                         
-                        data_out(5)  = max(0,data_out(5))  || flag_fv_eternal;   % Any false-vacuum eternal inflation?
+%                         data_out(5)  = max(0,data_out(5))  || flag_fv_eternal;   % Any false-vacuum eternal inflation?
                         data_out(18) = max(0,data_out(18)) || flag_hawking_moss; % Any Hawking-Moss instanton?
                         if ~(data_out(6) <= log_tunnel_rate)
                             data_out(19) = V(phi(i_tunnel,6))/obj.m_Pl^4;        % Energy of the false vacuum
@@ -303,8 +303,7 @@ methods (Access = public)
                 Ntotal = Ntotal(1:last_valid);
                 
                 % Only false vacuum eternal if followed by enough inflation
-                data_out(5) = max(0,data_out(5)) && ...
-                    (last_valid > 1 && Ntotal(last_valid) > p.Nafter);
+                data_out(5) = (last_valid > 1);
                 
                 if status(last_valid,1) == 4
                     break % No end of inflation

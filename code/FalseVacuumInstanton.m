@@ -871,7 +871,7 @@ methods (Static)
             
         end
         
-        if V(Phi(end)) > 0 || actionForm ~= 0
+        if V(Phi(end)) > 0 && actionForm ~= 0
             
             % Integrate over the finite volume outside the bubble
             w_ext = abs(kappa/3*V(Phi(end)))^0.5;

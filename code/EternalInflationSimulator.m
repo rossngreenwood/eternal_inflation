@@ -137,8 +137,13 @@ methods (Access = public)
                             % Require slow roll at the peak for Measure A
                             data_out(2) = 3;
                             if strcmpi(p.measure,'D')
-                                phistart = obj.find_phistart_attractor(xpeak*Mh,@(x) Mv^4*f{1}(x/Mh)-V_offset,...
-                                    @(x) Mv^4*f{2}(x/Mh)/Mh,@(x) Mv^4*f{3}(x/Mh)/Mh^2,Mh);
+                                try
+                                    phistart = obj.find_phistart_attractor(xpeak*Mh,@(x) Mv^4*f{1}(x/Mh)-V_offset,...
+                                        @(x) Mv^4*f{2}(x/Mh)/Mh,@(x) Mv^4*f{3}(x/Mh)/Mh^2,Mh);
+                                catch me
+                                    disp(me.message);
+                                    break
+                                end
                             else
                                 break
                             end
@@ -439,6 +444,8 @@ methods (Access = protected)
         flag_hm   = false(1,2);
         B         = inf(1,2);
         
+        kappa = 8*pi/obj.m_Pl^2;
+        
         %% Check for tunneling to nearby minima
         
         for lr = 1:2 % Left and right neighbor basins
@@ -446,54 +453,76 @@ methods (Access = protected)
             % Check if inflation can be successful in neighboring basins
             [any_viable,phitv,phipeak] = obj.screen_basin(...
                 lr,V,Vp,Vpp,ak,rho_offset,n_tunnel,phifv,Vfalse);
-            if ~any_viable, continue, end
             
-            try
+            if obj.parameters.flag_screen_basin && ~isnan(phipeak) && obj.parameters.mh > 1
+                % There's almost never a CdL solution for mh > 1
                 
-                % Initialize instanton solver
-                fvi = FalseVacuumInstanton(...
-                    'V',            V,...
-                    'dV',           Vp,...
-                    'd2V',          Vpp,...
-                    'm_Pl',         obj.m_Pl,...
-                    'phi_metaMin',  phifv,...
-                    'phi_absMin',   phitv,...
-                    'phi_bar_top',  phipeak);
+                %% Pre-compute Hawking-Moss tunneling rate
+                %  Check if a Hawking-Moss transition can
+                %  give us inflation near the local maximum
                 
-                % Solve for instanton profile
-                [R,profile] = fvi.find_profile([],...
-                    1e-4,... % xtol
-                    1e-4,... % phitol
-                    1e-2 );  % thinCutoff
+                w_top = abs(kappa/3*V(phipeak(1)))^0.5;
+                R = pi/w_top/2; Y = [phipeak(1),0,1/w_top,0,-w_top];
+                B_HM = FalseVacuumInstanton.find_tunneling_suppression_static(...
+                    3,kappa,V,phifv(1),R,Y);
                 
-            catch me
-                switch me.identifier
-                    case 'FalseVacuumInstanton:StableFalseVacuum'
-                        continue % No tunneling
-                    case 'FalseVacuumInstanton:IntegralDiverged'
-                        continue % Integration failed; assume no tunneling
-                    otherwise
-                        % Write potential coefs, phi_meatMin, phi_absMin to log
-                        % file, later for debugging
-                        disp(me.message);
-                        fid = fopen(obj.logfile,'at');
-                        fprintf(fid,'%s\r\n',me.message);
-                        fprintf(fid,'n_tunnel_remaining: %d\r\n',n_tunnel);
-                        fprintf(fid,'rho_offset: %.4G\r\n',rho_offset);
-                        fprintf(fid,'phi_metaMin, phi_absMin: %.4G,%.4G; ak:\r\n',[phifv,phitv]);
-                        for ii = 1:size(ak,1)
-                            fprintf(fid,'%.4f %.4f;\r\n',ak(ii,:));
-                        end
-                        fclose(fid);
-                        continue
-                end
-            end
-            
-            if isfinite(profile(1,1))
-                flag_hm(lr) = isscalar(R);  % Hawking-Moss instanton?
-                phitunnel(lr) = profile(1,1); % Field value at center of bubble
+                flag_hm(lr) = true;  % Hawking-Moss instanton?
+                phitunnel(lr) = phipeak(1); % Field value at center of bubble
                 % Tunneling suppression B = -log(\lambda) = S_bubble - S_bkgd
-                B(lr) = fvi.find_tunneling_suppression(R,profile);
+                B(lr) = B_HM;
+                
+            elseif any_viable
+                
+                try
+                    
+                    % Initialize instanton solver
+                    fvi = FalseVacuumInstanton(...
+                        'V',            V,...
+                        'dV',           Vp,...
+                        'd2V',          Vpp,...
+                        'm_Pl',         obj.m_Pl,...
+                        'phi_metaMin',  phifv,...
+                        'phi_absMin',   phitv,...
+                        'phi_bar_top',  phipeak);
+                    
+                    % Solve for instanton profile
+                    [R,profile] = fvi.find_profile([],...
+                        1e-4,... % xtol
+                        1e-4,... % phitol
+                        1e-2 );  % thinCutoff
+                    
+                catch me
+                    switch me.identifier
+                        case 'FalseVacuumInstanton:StableFalseVacuum'
+                            continue % No tunneling
+                        case 'FalseVacuumInstanton:IntegralDiverged'
+                            continue % Integration failed; assume no tunneling
+                        otherwise
+                            % Write potential coefs, phi_meatMin, phi_absMin to log
+                            % file, later for debugging
+                            disp(me.message);
+                            fid = fopen(obj.logfile,'at');
+                            fprintf(fid,'%s\r\n',me.message);
+                            fprintf(fid,'n_tunnel_remaining: %d\r\n',n_tunnel);
+                            fprintf(fid,'rho_offset: %.4G\r\n',rho_offset);
+                            fprintf(fid,'phi_metaMin, phi_absMin: %.4G,%.4G; ak:\r\n',[phifv,phitv]);
+                            for ii = 1:size(ak,1)
+                                fprintf(fid,'%.4f %.4f;\r\n',ak(ii,:));
+                            end
+                            fclose(fid);
+                            continue
+                    end
+                end
+                
+                if isfinite(profile(1,1))
+                    flag_hm(lr) = isscalar(R);  % Hawking-Moss instanton?
+                    phitunnel(lr) = profile(1,1); % Field value at center of bubble
+                    % Tunneling suppression B = -log(\lambda) = S_bubble - S_bkgd
+                    B(lr) = fvi.find_tunneling_suppression(R,profile);
+                end
+                
+            else
+                continue
             end
             
         end
@@ -911,8 +940,8 @@ methods (Access = protected)
             phibar = 0.5*(phimin + phimax);
             phisep = abs(phimax-phimin);
             
-%             Vtarget = 0.05*V(near_minima(b)) + 0.95*V(phipeak(b));
-            Vtarget = V(phifv);
+            Vtarget = 0.05*V(near_minima(b)) + 0.95*V(phipeak(b));
+%             Vtarget = V(phifv);
             
             nbits = 5;
             ind = 1;
@@ -981,24 +1010,25 @@ methods (Access = protected)
             elseif status_start == 0 && Ntotal >= obj.parameters.Nafter
                 % Tunneling basin is viable
                 any_viable = true; break
-            elseif abs(Vpp(phipeak(b))/V(phipeak(b)))/(kappa) < 1
-                % Second derivative slow roll conditions met at peak
-                
-                %% Pre-compute Hawking-Moss tunneling rate
-                %  Check if a Hawking-Moss transition can
-                %  give us inflation near the local maximum
-                
-                w_top = abs(kappa/3*V(phipeak(b)))^0.5;
-                R = pi/w_top/2; Y = [phipeak(b),0,1/w_top,0,-w_top];
-                B_HM = FalseVacuumInstanton.find_tunneling_suppression_static(...
-                    3,kappa,V,phifv(b),R,Y);
-                
-                if -B_HM >= log_stable_rate_cutoff
-                    % Hawking-Moss instanton is viable
-                    any_viable = true; break
-                end
-                
             end
+%             elseif abs(Vpp(phipeak(b))/V(phipeak(b)))/(kappa) < 1
+%                 % Second derivative slow roll conditions met at peak
+%                 
+%                 %% Pre-compute Hawking-Moss tunneling rate
+%                 %  Check if a Hawking-Moss transition can
+%                 %  give us inflation near the local maximum
+%                 
+%                 w_top = abs(kappa/3*V(phipeak(b)))^0.5;
+%                 R = pi/w_top/2; Y = [phipeak(b),0,1/w_top,0,-w_top];
+%                 B_HM = FalseVacuumInstanton.find_tunneling_suppression_static(...
+%                     3,kappa,V,phifv(b),R,Y);
+%                 
+%                 if -B_HM >= log_stable_rate_cutoff
+%                     % Hawking-Moss instanton is viable
+%                     any_viable = true; break
+%                 end
+%                 
+%             end
             
             if b < n_tunnel_remain
                 phifv(b+1) = near_minima(b);
@@ -1064,7 +1094,6 @@ methods (Access = protected)
                 error('FalseVacuumInstanton:IntegralDiverged',...
                     'ODE solver failed to integrate instanton solution.');
         end
-        [phipeak phistart]
         
     end
     

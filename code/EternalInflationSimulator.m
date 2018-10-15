@@ -82,10 +82,10 @@ methods (Access = public)
                         % Saturate the bound to give most leeway
                         if V0(ii) < -V_offset_max
                             data_out(2) = 1; break
-                        elseif (Vp0(ii)/(V0(ii)+V_offset_max)).^2/(16*pi/obj.m_Pl^2) > 1
-                            data_out(2) = 2;
-                        elseif abs(Vpp0(ii)/(V0(ii)+V_offset_max))/(8*pi/obj.m_Pl^2) > 1
-                            data_out(2) = 3;
+                        %elseif (Vp0(ii)/(V0(ii)+V_offset_max)).^2/(16*pi/obj.m_Pl^2) > 1
+                        %    data_out(2) = 2;
+                        %elseif abs(Vpp0(ii)/(V0(ii)+V_offset_max))/(8*pi/obj.m_Pl^2) > 1
+                        %    data_out(2) = 3;
                         else
                             data_out(2) = 0;
                         end
@@ -120,9 +120,11 @@ methods (Access = public)
                 
                 %% Set phistart
                 
+                Vstart  = []; Vpstart = [];
+                
                 switch p.measure
                     
-                    case 'A'
+                    case {'A','D'}
                         
                         % Look uphill for the (dim-less) potential peak
                         xpeak = find_phipeak(phiinit/Mh,ak,1,0,1);
@@ -134,52 +136,34 @@ methods (Access = public)
                         if abs(f{3}(xpeak)/(f{1}(xpeak)-V_offset/Mv^4)/Mh^2)/(8*pi/obj.m_Pl^2) > 1
                             % Require slow roll at the peak for Measure A
                             data_out(2) = 3;
-                            break
-                        end
-                        
-                        phistart = xpeak*Mh; % Start at maximum
-                        
-                        Vstart  = []; Vpstart = [];
-                        
-                    case 'B'
-                        
-                        phistart = phiinit;
-                        Vstart   = V0(ii)-V_offset;
-                        Vpstart  = Vp0(ii);
-                        
-                    case 'C'
-                        
-                        if data_out(2) == 0 && V_offset == 0
-                            phistart = phiinit; % phiinit already inflates
-                        elseif (f{2}(phiinit/Mh)/(f{1}(phiinit/Mh)-V_offset/Mv^4)/Mh)^2/(16*pi/obj.m_Pl^2) < 1 && ...
-                                abs(f{3}(phiinit/Mh)/(f{1}(phiinit/Mh)-V_offset/Mv^4)/Mh^2)/(8*pi/obj.m_Pl^2) < 1
-                            phistart = phiinit; % phiinit inflates after shift
-                        else
-                            % Look for any inflation downhill from phiinit
-                            phistart = obj.find_phistart(phiinit/Mh,@(x) f{1}(x)-V_offset/Mv^4,...
-                                @(x) f{2}(x)/Mh,@(x) f{3}(x)/Mh^2,1,obj.m_Pl)*Mh;
-                        end
-                        
-                        Vstart  = []; Vpstart = [];
-                        
-                    case 'D'
-                        
-                        % Look uphill for the (dim-less) potential peak
-                        xpeak = find_phipeak(phiinit/Mh,ak,1,0,1);
-                        
-                        % Move phiinit to peak; tag with fall direction
-                        phiinit = xpeak*Mh + 1i*sign(phiinit-xpeak*Mh);
-                        
-                        % Check for slow roll at peak (assume \epsilon_V << 1)
-                        if abs(f{3}(xpeak)/(f{1}(xpeak)-V_offset/Mv^4)/Mh^2)/(8*pi/obj.m_Pl^2) > 1
-                            data_out(2) = 3; % Start wherever slow roll starts
-                            phistart = obj.find_phistart(xpeak,@(x) f{1}(x)-V_offset/Mv^4,...
-                                @(x) f{2}(x)/Mh,@(x) f{3}(x)/Mh^2,1,obj.m_Pl)*Mh;
+                            if strcmpi(p.measure,'D')
+                                phistart = obj.find_phistart_attractor(xpeak*Mh,@(x) Mv^4*f{1}(x/Mh)-V_offset,...
+                                    @(x) Mv^4*f{2}(x/Mh)/Mh,@(x) Mv^4*f{3}(x/Mh)/Mh^2,Mh);
+                            else
+                                break
+                            end
                         else
                             phistart = xpeak*Mh; % Start at maximum
                         end
                         
-                        Vstart  = []; Vpstart = [];
+                    case {'B','C'}
+                        
+                        if data_out(2) == 0 && V_offset == 0
+                            phistart = phiinit; % phiinit already inflates
+                            Vstart   = V0(ii)-V_offset;
+                            Vpstart  = Vp0(ii);
+                        elseif (f{2}(phiinit/Mh)/(f{1}(phiinit/Mh)-V_offset/Mv^4)/Mh)^2/(16*pi/obj.m_Pl^2) < 1 && ...
+                                abs(f{3}(phiinit/Mh)/(f{1}(phiinit/Mh)-V_offset/Mv^4)/Mh^2)/(8*pi/obj.m_Pl^2) < 1
+                            phistart = phiinit; % phiinit inflates after shift
+                        elseif strcmpi(p.measure,'C')
+                            % Look for any inflation downhill from phiinit
+                            % phistart = obj.find_phistart(phiinit/Mh,@(x) f{1}(x)-V_offset/Mv^4,...
+                            %     @(x) f{2}(x)/Mh,@(x) f{3}(x)/Mh^2,1,obj.m_Pl)*Mh;
+                            phistart = obj.find_phistart_attractor(phiinit,@(x) Mv^4*f{1}(x/Mh)-V_offset,...
+                                @(x) Mv^4*f{2}(x/Mh)/Mh,@(x) Mv^4*f{3}(x/Mh)/Mh^2,Mh);
+                        else
+                            break
+                        end
                         
                 end
                 
@@ -249,14 +233,6 @@ methods (Access = public)
                         [phi(it,:),status(it,1),Ntotal(it,1),V,Vp,Vpp] = ...
                             obj.simulate_slowroll(f,phistart,V_offset,...
                             ~isreal(phiinit),Vstart,Vpstart);
-%                         if i_tunnel == 0 && strcmpi(p.measure,'D') && ...
-%                                 (isnan(Ntotal(it,1)) || Ntotal(it,1) < p.Nafter) && ...
-%                                 phistart == real(phiinit) && status(it,1) ~= 4
-%                             phistart = obj.find_phistart(phi(it,5),V,Vp,Vpp,Mh,obj.m_Pl);
-%                             [phi(it,:),status(it,1),Ntotal(it,1),V,Vp,Vpp] = ...
-%                                 obj.simulate_slowroll(f,phistart,V_offset,...
-%                                 ~isreal(phiinit),Vstart,Vpstart);
-%                         end 
                     end
                     
                     phi(it,2) = phiinit;
@@ -292,6 +268,7 @@ methods (Access = public)
                 %% Screen models based on amount of inflation
                 
                 if isnan(last_valid)
+                    % Inflation doesn't end in any basin?
                     last_valid = find(isfinite(status),1,'last');
                     if isempty(last_valid), break, end
                 end
@@ -302,7 +279,7 @@ methods (Access = public)
                 phi    = phi(1:last_valid,:);
                 Ntotal = Ntotal(1:last_valid);
                 
-                % Only false vacuum eternal if followed by enough inflation
+                % Only fv eternal if inflation ends in another basin
                 data_out(5) = (last_valid > 1);
                 
                 if status(last_valid,1) == 4
@@ -371,7 +348,7 @@ methods (Access = public)
             
             %% Record results
             
-%             obj.write_output(record_flag,p.outfile,data_out);
+            obj.write_output(record_flag,p.outfile,data_out);
             
         end % while
         
@@ -562,6 +539,7 @@ methods (Access = protected)
         phiexit  = phi(4);
         phiend   = phi(5);
         
+        % Initialized at peak and the peak inflates
         flag_starts_at_peak = (imag(phi(2)) ~= 0) && (phistart == real(phi(2)));
         
         phiscale = p.mh*obj.m_Pl;
@@ -669,17 +647,17 @@ methods (Access = protected)
             % Add phistart as the past boundary of the first interval
             phibreak = [phistart phibreak];
             off2on   = [1        off2on];
-            if flag_starts_at_peak && (kappa*V(phistart))^(3/2) < 10.25 * Vpp(phistart)*phistart
-                % Second derivative check fails around potential peak
-                % Remove the bout of SEI contiguous with phistart
-                phibreak = phibreak(min(3,end+1):end);
-                off2on   = off2on(min(3,end+1):end);
-                % TODO: Find where the 2DC becomes valid and determine if
-                % it invalidates the whole epoch near the maximum
-                if isempty(phibreak)
-                    return
-                end
-            end
+%             if flag_starts_at_peak && (kappa*V(phistart))^(3/2) < 10.25 * Vpp(phistart)*phistart
+%                 % Second derivative check fails around potential peak
+%                 % Remove the bout of SEI contiguous with phistart
+%                 phibreak = phibreak(min(3,end+1):end);
+%                 off2on   = off2on(min(3,end+1):end);
+%                 % TODO: Find where the 2DC becomes valid and determine if
+%                 % it invalidates the whole epoch near the maximum
+%                 if isempty(phibreak)
+%                     return
+%                 end
+%             end
         end
         
         if off2on(end) == 1 % SEI is satisfied at phiend
@@ -751,8 +729,13 @@ methods (Access = protected)
         if abs(Vpp(phipeak)/V(phipeak))/(8*pi/obj.m_Pl^2) > 1
             % No inflation at maximum
             flag_topological_eternal = false;
-            return
+        else
+            flag_topological_eternal = true;
         end
+        
+        return
+        
+        %%
         
         % Find value of phi at the domain wall boundary 
         % where inflation breaks down
@@ -1031,6 +1014,60 @@ methods (Access = protected)
         
     end
     
+    function [phistart] = find_phistart_attractor(obj,phipeak,V,Vp,Vpp,phiscale)
+        
+        %% Find start of slow roll below the maximum
+        
+        [phistart,status] = obj.find_phistart(phipeak,V,Vp,Vpp,phiscale,obj.m_Pl);
+        
+        if isnan(phistart)
+            return
+        end
+        
+        %% Test the maximum value |dphi/dt| = sqrt(2*V(phistart))
+        
+        % Positive means we're heading down
+        ysign = sign(phistart-phipeak);
+        Vstart = V(phistart);
+        
+        y0 = [phistart, ysign*sqrt(2*Vstart), 1, sqrt(V(phistart)/3/obj.M_Pl^2)];
+        
+        % dY is the ODE that we use
+        dY = @(r,y) obj.equation_of_motion(V,Vp,r,y,obj.m_Pl).';
+        
+        ie = [];
+        tmin = -abs(y0(1)/y0(2))/10;
+        count = 0;
+        while isempty(ie)
+            
+            options = odeset(...
+                'Events',   @(~,y) obj.ode_events(y,ysign,phipeak) );
+            [r1,y1,re,~,ie] = ode23s(dY,[0,tmin],y0.',options);
+            
+            tmin = tmin*2;
+            count = count+1;
+            if count > 10
+                error('EternalInflationSimulator:NoTerminatingEvents',...
+                    'No terminating events were triggered.')
+            end
+            
+        end
+        
+        %% Return phistart = nan if phi picks up too much kinetic energy
+        
+        switch ie(end)
+            case 1 % Passed the peak
+                % Means kinetic energy is within attractor at phistart
+            case 2 % Didn't make it to the peak
+                phistart = nan;
+            otherwise
+                error('FalseVacuumInstanton:IntegralDiverged',...
+                    'ODE solver failed to integrate instanton solution.');
+        end
+        [phipeak phistart]
+        
+    end
+    
 end
 
 methods (Static)
@@ -1165,7 +1202,10 @@ methods (Static)
                 Vppend = Vpp(phi);
             end
             ii = mod(ind-1,batch)+1;
-            if (Vpend(ii)/Vend(ii)).^2/(2*kappa) > 1
+            if Vend(ii) < 0
+                status = 1;
+                break
+            elseif (Vpend(ii)/Vend(ii)).^2/(2*kappa) > 1
                 status = 2;
             elseif abs(Vppend(ii)/Vend(ii))/(kappa) > 1
                 status = 3;
@@ -1411,6 +1451,55 @@ methods (Static)
                     [3 data_out([2:6 18 19 7:17])]);
                 fclose(fid);
         end
+        
+    end
+    
+    function dy = equation_of_motion(V,dV,~,y,m_Pl)
+        % Used to integrate the bubble wall.
+        %
+        % .. math::
+        %   \frac{d^2\phi}{dr^2} 
+        %     + \frac{\alpha}{\rho}\frac{d\rho}{dr}\frac{d\phi}{dr} =
+        %     \frac{dV}{d\phi} \\
+        %   \frac{d^2\rho}{dr^2} = 
+        %     -\frac{8\pi}{3M_{Pl}^2}\left[\left(\frac{d\phi}{dr}\right)^2
+        %     + V(\phi)\right]
+        % 
+        % Inputs
+        %   y = [phi, dphi, rho, drho]
+        %   r (unused)
+        % Outputs
+        %   dy = [dphi, d2phi, drho, d2rho]
+        
+        y = permute(y,circshift([1 2],[0,find(size(y) == 4)]));
+        
+        % Unpack variables
+        phi  = y(:,1);
+        dphi = y(:,2);
+        a    = y(:,3);
+        da   = y(:,4);
+        
+        kappa = 8*pi/m_Pl^2;
+        
+        d2phi = -dV(phi.').' - 3*da.*dphi./a;
+        d2a = -kappa/3*(dphi.^2 - V(phi.').');
+        
+        dy = [dphi,d2phi,da,d2a];
+        
+    end
+    
+    function [value,isterminal,direction] = ode_events(y,ysign,phi0)
+        
+        phi = y(1); dphi = y(2);
+        
+        events = [...
+            (phi-phi0)*ysign,  true,   0;...
+            dphi*ysign,        true,   0 ...
+            ];
+        
+        value       = events(:,1);
+        isterminal  = events(:,2);
+        direction   = events(:,3);
         
     end
     

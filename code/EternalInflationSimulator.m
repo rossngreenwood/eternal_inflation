@@ -453,8 +453,11 @@ methods (Access = protected)
             % Check if inflation can be successful in neighboring basins
             [any_viable,phitv,phipeak] = obj.screen_basin(...
                 lr,V,Vp,Vpp,ak,rho_offset,n_tunnel,phifv,Vfalse);
+            if isnan(phipeak), continue, end
             
-            if obj.parameters.flag_screen_basin && ~isnan(phipeak) && obj.parameters.mh > 1
+            mh_eff = 1/sqrt(abs(Vpp(phipeak(1))/V(phipeak(1))))/obj.m_Pl;
+            
+            if obj.parameters.flag_screen_basin && mh_eff > 1
                 % There's almost never a CdL solution for mh > 1
                 
                 %% Pre-compute Hawking-Moss tunneling rate
@@ -471,7 +474,7 @@ methods (Access = protected)
                 % Tunneling suppression B = -log(\lambda) = S_bubble - S_bkgd
                 B(lr) = B_HM;
                 
-            elseif any_viable
+            elseif mh_eff > 0.1 || any_viable
                 
                 try
                     

@@ -186,7 +186,7 @@ def massBin2D(run_ids):
         fractions['stoch2'][ind]      += sum(data['numStochEpochs'] == 2)
         fractions['stochAtExit'][ind] += sum(data['NSinceStoch'] == 0)
         fractions['fv'][ind]          += sum(data['flag_fv_eternal'] > 0)
-        fractions['top'][ind]         += sum(data['numTopolEpochs'] > 1)
+        fractions['top'][ind]         += sum(data['numTopolEpochs'] > 0)
         fractions['fv_hm'][ind]       += sum(data['flag_hawking_moss'] > 0)
 
     # Divide by total counts to obtain fractions

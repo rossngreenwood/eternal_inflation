@@ -1,5 +1,5 @@
 #!/bin/bash
-
+echo $4
 for ((test_id = $1; test_id <= $2; test_id++))
 do
   
@@ -10,6 +10,6 @@ do
   outdir="../data/out_$id_str/"
   outfile="outfile_t_$id_str.txt"
   
-  python eternal_sim_cleanup.py --output_dir $outdir --output_file $outfile --truncate 1
+  python3 eternal_sim_cleanup.py --output_dir $outdir --output_file $outfile --cut_params "$3" --cut_bounds "$4"
 
 done

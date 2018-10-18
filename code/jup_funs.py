@@ -10,7 +10,7 @@ def getBinnedFractions(run_ids,binParam,bins,rho_thres=0.02):
         data_dir = 'C:/Users/Ross/Documents/data/'
     else:
         data_dir = '~/eternal_inflation/data/'
-
+    
     data_names = ['record_flag','status','N','rho_offset','flag_fv_eternal', \
                 'log_tunnel_rate', 'flag_hawking_moss','rho_false', \
                 'numStochEpochs', 'NSinceStoch','numTopolEpochs','Q','r', \
@@ -59,7 +59,7 @@ def getBinnedFractions(run_ids,binParam,bins,rho_thres=0.02):
         if not binParam in ['mv','mh']:
             ibin = np.digitize(data[binParam],bins)
         else:
-            ibin = np.digitize(meta['mv'][0],bins)*np.ones((len(data),1))
+            ibin = np.digitize(meta[binParam][0],bins)*np.ones((len(data),1))
 
         for ind in range(0,len(bins)+1):
 
@@ -139,7 +139,7 @@ def massBin2D(run_ids):
         if osname == 'nt':
             fname = data_dir + 'outfile_t_' + ('%04d' % run_ids[i]) + '.txt'
         else:
-            fname = data_dir + 'out_' + ('%04d' % run_ids[i]) + '/outfile_t_' + ('%04d' % run_ids[i]) + '.txt'
+            fname = data_dir + 'out_' + ('%04d' % run_ids[i]) + '/outfile_Q_' + ('%04d' % run_ids[i]) + '.txt'
 
         try:
             meta = pd.read_csv(fname,header=None,names=meta_names,nrows=1)

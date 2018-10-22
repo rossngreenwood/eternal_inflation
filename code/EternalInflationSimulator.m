@@ -272,6 +272,9 @@ methods (Access = public)
                 
                 %% Screen models based on amount of inflation
                 
+                % Only fv eternal if inflation ends in another basin
+                data_out(5) = (last_valid > 1);
+                
                 if isnan(last_valid)
                     % Inflation doesn't end in any basin?
                     last_valid = find(isfinite(status),1,'last');
@@ -283,9 +286,6 @@ methods (Access = public)
                 
                 phi    = phi(1:last_valid,:);
                 Ntotal = Ntotal(1:last_valid);
-                
-                % Only fv eternal if inflation ends in another basin
-                data_out(5) = (last_valid > 1);
                 
                 if status(last_valid,1) == 4
                     break % No end of inflation

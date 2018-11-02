@@ -1318,16 +1318,50 @@ methods (Static)
             if Vend(ii) < 0
                 status = 1;
             elseif (Vpend(ii)/Vend(ii)).^2/(2*kappa) > 1
-                status = 2;
+                break
             elseif abs(Vppend(ii)/Vend(ii))/kappa > 1
-                status = 3;
+                break
             end
             if sgn*Vpend(ii) < 0
-                status = 4;
+                break
             end
             ind = ind + 1;
         end
         phiend = phi;
+        
+        if status == 0
+            % Take steps until passed breakdown of slow roll
+            step = 10^(1/16);                                                       %%% Tunable
+            ind = 1;
+            batch = 40;
+            if ii == 1
+                phi = phi_last*ones(1,batch);
+            else
+                phi = phiend(ii-1)*ones(1,batch);
+            end
+            while status == 0
+                if mod(ind,batch) == 1
+                    phi_last = phi(end);
+                    phi = phi_last + cumsum(dphi*step.^(ind-1:ind+batch-2));
+                    Vend   = V(phi);
+                    Vpend  = Vp(phi);
+                    Vppend = Vpp(phi);
+                end
+                ii = mod(ind-1,batch)+1;
+                if Vend(ii) < 0
+                    status = 1;
+                elseif (Vpend(ii)/Vend(ii)).^2/(2*kappa) > 1
+                    status = 2;
+                elseif abs(Vppend(ii)/Vend(ii))/kappa > 1
+                    status = 3;
+                end
+                if sgn*Vpend(ii) < 0
+                    status = 4;
+                end
+                ind = ind + 1;
+            end
+            phiend = phi;
+        end
         
         if lambdascreenmode
             if status == 1

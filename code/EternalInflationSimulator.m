@@ -128,6 +128,7 @@ methods (Access = public)
                         
                         % Look uphill for the (dim-less) potential peak
                         xpeak = find_phipeak(phiinit/Mh,ak,1,0,1);
+                        xpeak = find_phipeak(xpeak,ak,1,0,1);
                         
                         % Move phiinit to peak; tag with fall direction
                         phiinit = xpeak*Mh + 1i*sign(phiinit-xpeak*Mh);
@@ -321,15 +322,20 @@ methods (Access = public)
                 for b = 0:size(phi,1)-1 % Loop over basins
                     
                     % Stochastic eternal inflation
-                    [numStochEpochs,NSinceStoch] = obj.check_stochastic_eternal(V,Vp,Vpp,phi(1+b,:));
+                    [numStochEpochs,NSinceStoch,NStochastic] = obj.check_stochastic_eternal(V,Vp,Vpp,phi(1+b,:));
                     data_out(7) = max(0,data_out(7)) + max(0,numStochEpochs);
                     data_out(8) = NSinceStoch; % Only keeps value from last basin
+                    if ~isnan(NStochastic)
+                        Ntotal(1+b) = NStochastic + NSinceStoch + p.Nafter;
+                    end
                     
                     % Topological eternal inflation
                     flag_topological_eternal = obj.check_topological_eternal(V,Vp,Vpp,phi(1+b,2),phi(1+b,1));
                     data_out(9) = max(0,data_out(9)) + max(0,flag_topological_eternal);
                     
                 end
+                
+                data_out(3) = Ntotal(end);
                 
                 %% Compute observables
                 
@@ -557,7 +563,7 @@ methods (Access = protected)
         
     end
     
-    function [numStochEpochs,NSinceStoch] = check_stochastic_eternal(obj,V,Vp,Vpp,phi)
+    function [numStochEpochs,NSinceStoch,NStochastic] = check_stochastic_eternal(obj,V,Vp,Vpp,phi)
         
         p = obj.parameters;
         
@@ -566,6 +572,7 @@ methods (Access = protected)
         
         numStochEpochs = nan; % Number of intervals of eternal inflation
         NSinceStoch    = nan; % Number of e-foldings between SEI breakdown and exit scale
+        NStochastic    = nan; % Expected number of e-folds 
         
         phistart = phi(3);
         phiexit  = phi(4);
@@ -720,7 +727,6 @@ methods (Access = protected)
         %% Compute # of e-folds after past SEI breakdown and before phiexit
         
         if isnan(phiexit)
-            return % not applicable
         elseif (hbar^0.5*kappa*V(phiexit)).^1.5 - 2*pi*sqrt(3)*(0.607)*abs(Vp(phiexit)) > 0
             NSinceStoch = 0; % Eternal at phiexit
         elseif any((phibreak(~off2on)-phiexit)*Vp(phiexit) > 0)
@@ -729,6 +735,15 @@ methods (Access = protected)
             [~,imin] = min(abs(phibreak_last-phiexit));
             % Integrate e-foldings
             NSinceStoch = integral(@(x) dlna_dphi(x),phibreak_last(imin),phiexit);
+        end
+        
+        %% Compute NStochastic
+        
+        NStochastic = 0;
+        for ii = 1:length(phibreak)/2
+            DeltaPhi = abs(phibreak(2*ii)-phibreak(2*ii-1));
+            deltaPhi = sqrt(kappa*V((phibreak(2*ii)+phibreak(2*ii-1))/2)/3)/2/pi;
+            NStochastic = NStochastic + (DeltaPhi/deltaPhi)^2;
         end
         
     end

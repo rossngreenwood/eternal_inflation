@@ -312,8 +312,8 @@ methods (Access = public)
                 % Set phi(:,1) = phipeak
                 phi(:,1) = real(phi(:,2));
                 for it = 1:size(phi,1)
-                    if ~isreal(phi(it,2)), continue, end
-                    phi(it,1) = find_phipeak(phi(it,2)/Mh,...
+                    if ~isreal(phi(it,2)) && it == 1, continue, end
+                    phi(it,1) = find_phipeak(real(phi(it,2))/Mh,...
                         ak,1,V_offset/Mv^4,1)*Mh;
                 end
                 

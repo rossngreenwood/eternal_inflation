@@ -125,7 +125,7 @@ def getBinnedFractions2D(run_ids,binParam,bins):
                 'Nafter','seed','n_recycle'];
     frac_names = ['mv','mh','len','n_iter','success','Q','r','ns','alpha', \
                 'rho_Lambda','lgOk', 'stoch1','stoch2','stochAtExit','fv', \
-                'fv_hm','top','wildcard']
+                'fv_hm','top','wildcard','NStoch']
 
     n_run = len(run_ids)
 
@@ -175,7 +175,7 @@ def getBinnedFractions2D(run_ids,binParam,bins):
                 ilog = np.logical_and(ibin[0] == ind0, ibin[1] == ind1)
 
                 ind = ind0*(len(bins[1])+1)+ind1
-                
+
                 if not any(ilog):
                     continue
 
@@ -199,6 +199,7 @@ def getBinnedFractions2D(run_ids,binParam,bins):
                 fractions['fv'][ind]          += sum(data[ilog]['flag_fv_eternal'] > 0)
                 fractions['top'][ind]         += sum(data[ilog]['numTopolEpochs'] > 1)
                 fractions['fv_hm'][ind]       += sum(data[ilog]['flag_hawking_moss'] > 0)
+                fractions['NStoch'][ind]      += sum(data[ilog]['N']-data[ilog]['NSinceStoch']-55)
 
     # Divide by total counts to obtain fractions
     for j in fractions.index:
@@ -216,6 +217,7 @@ def getBinnedFractions2D(run_ids,binParam,bins):
             fractions['alpha'][j]       /= fractions['len'][j]
             fractions['rho_Lambda'][j]  /= fractions['len'][j]
             fractions['lgOk'][j]        /= fractions['len'][j]
+            fractions['NStoch'][j]      /= fractions['len'][j]
 
     print(' Done')
 
@@ -285,7 +287,7 @@ def massBin2D(run_ids):
         # Fractions for observables
         fractions['Q'][ind]           += sum(np.logical_and(data['Q'] > np.sqrt(np.exp(3.089-0.036)/(1e10)), \
                                           data['Q'] < np.sqrt(np.exp(3.089+0.036)/(1e10))))
-        fractions['r'][ind]           += sum(data['r'] < 0.114)
+        fractions['r'][ind]           += sum(data['r'] < 0.064)
         fractions['ns'][ind]          += sum(np.logical_and(data['n_s'] > 0.9655-0.0062, \
                                           data['n_s'] < 0.9655+0.0062))
         fractions['alpha'][ind]       += sum(np.logical_and(data['alpha'] > -0.0057-0.0071, \

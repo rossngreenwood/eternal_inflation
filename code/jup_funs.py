@@ -85,7 +85,7 @@ def getBinnedFractions(run_ids,binParam,bins):
             fractions['stoch2'][ind]      += sum(data[ilog]['numStochEpochs'] == 2)
             fractions['stochAtExit'][ind] += sum(data[ilog]['NSinceStoch'] == 0)
             fractions['fv'][ind]          += sum(data[ilog]['flag_fv_eternal'] > 0)
-            fractions['top'][ind]         += sum(data[ilog]['numTopolEpochs'] > 1)
+            fractions['top'][ind]         += sum(data[ilog]['numTopolEpochs'] > 0)
             fractions['fv_hm'][ind]       += sum(data[ilog]['flag_hawking_moss'] > 0)
 
     # Divide by total counts to obtain fractions
@@ -197,8 +197,9 @@ def getBinnedFractions2D(run_ids,binParam,bins):
                 fractions['stoch2'][ind]      += sum(data[ilog]['numStochEpochs'] == 2)
                 fractions['stochAtExit'][ind] += sum(data[ilog]['NSinceStoch'] == 0)
                 fractions['fv'][ind]          += sum(data[ilog]['flag_fv_eternal'] > 0)
-                fractions['top'][ind]         += sum(data[ilog]['numTopolEpochs'] > 1)
+                fractions['top'][ind]         += sum(data[ilog]['numTopolEpochs'] > 0)
                 fractions['fv_hm'][ind]       += sum(data[ilog]['flag_hawking_moss'] > 0)
+                ilog = np.logical_and(ilog,not np.isnan(data['NSinceStoch']))
                 fractions['NStoch'][ind]      += sum(data[ilog]['N']-data[ilog]['NSinceStoch']-55)
 
     # Divide by total counts to obtain fractions
@@ -222,6 +223,79 @@ def getBinnedFractions2D(run_ids,binParam,bins):
     print(' Done')
 
     return fractions
+
+def getBin2D(run_ids,binParam,bins):
+
+    if osname == 'nt':
+        data_dir = 'C:/Users/Ross/Documents/data/'
+    else:
+        data_dir = '~/eternal_inflation/data/'
+
+    data_names = ['record_flag','status','N','rho_offset','flag_fv_eternal', \
+                'log_tunnel_rate', 'flag_hawking_moss','rho_false', \
+                'numStochEpochs', 'NSinceStoch','numTopolEpochs','Q','r', \
+                'n_s','alpha','n_t','dlgrho','lgOk','rho_Lambda'];
+    meta_names = ['n_iter','cores','mv','mh','m_Pl','kmax','gamma','measure', \
+                'n_tunnel_max','lambdascreen', 'rho_Lambda_thres','fixQ', \
+                'Nafter','seed','n_recycle'];
+
+    n_run = len(run_ids)
+
+    print('Loading data...         |')
+    count = 0
+
+    dataBin = pd.DataFrame(np.zeros([0,len(data_names)]), columns=data_names)
+
+    for i in range(0,n_run):
+
+        if osname == 'nt':
+            fname = data_dir + 'outfile_t_' + ('%04d' % run_ids[i]) + '.txt'
+        else:
+            fname = data_dir + 'out_' + ('%04d' % run_ids[i]) + '/outfile_t_' + ('%04d' % run_ids[i]) + '.txt'
+
+        try:
+            meta = pd.read_csv(fname,header=None,names=meta_names,nrows=1)
+        except:
+            continue
+
+        if meta.shape[0] == 0:
+            continue
+
+        if i == 0 and meta.shape[0] > 0:
+            print('Measure: %s' % meta['measure'][0])
+
+        if np.floor(i/(n_run/25)) >= count:
+            count = count + 1
+            stdout.write('#')
+
+        data = pd.read_csv(fname, skiprows=2,header=None,names=data_names)
+
+        if data.shape[0] == 0:
+            continue
+
+        ibin = [0 for x in binParam]
+        for iparam in range(0,len(binParam)):
+            if not binParam[iparam] in ['mv','mh']:
+                ibin[iparam] = np.digitize(data[binParam[iparam]],bins[iparam])
+                ibin[iparam][np.isnan(data[binParam[iparam]])] = -1
+            else:
+                ibin[iparam] = np.digitize(meta[binParam[iparam]][0],bins[iparam])*np.ones((len(data),1)[0])
+
+        for ind0 in range(1,2):
+            for ind1 in range(1,2):
+
+                ilog = np.logical_and(ibin[0] == ind0, ibin[1] == ind1)
+
+                ind = ind0*(len(bins[1])+1)+ind1
+
+                if not any(ilog):
+                    continue
+
+                dataBin = dataBin.append(data[ilog])
+
+    print(' Done')
+
+    return dataBin
 
 def massBin2D(run_ids):
 
@@ -253,7 +327,7 @@ def massBin2D(run_ids):
         if osname == 'nt':
             fname = data_dir + 'outfile_t_' + ('%04d' % run_ids[i]) + '.txt'
         else:
-            fname = data_dir + 'out_' + ('%04d' % run_ids[i]) + '/outfile_Q_' + ('%04d' % run_ids[i]) + '.txt'
+            fname = data_dir + 'out_' + ('%04d' % run_ids[i]) + '/outfile_t_' + ('%04d' % run_ids[i]) + '.txt'
 
         try:
             meta = pd.read_csv(fname,header=None,names=meta_names,nrows=1)

@@ -31,11 +31,15 @@ methods (Access = public)
         phi0 = phi0_spacing*(-floor(p.n_recycle/2):floor(p.n_recycle/2)-1+mod(p.n_recycle,2));
         
         i_iter = 0;
+        i_success = 0;
         while true, i_iter = i_iter + 1;
             
-            if i_iter > abs(p.n_iter)
+            if p.n_iter > 0 && i_iter > p.n_iter
                 break
-            elseif mod(i_iter,1e5) == 0
+            elseif p.n_iter < 0 && (i_success > abs(p.n_iter) || i_iter > 1e9)
+                break
+            end
+            if mod(i_iter,1e5) == 0
                 disp(num2str(i_iter));
             end
             
@@ -308,7 +312,16 @@ methods (Access = public)
                 end
                 
                 record_flag = 3;
+                if p.n_iter < 0
+                    i_success = i_success + 1;
+                end
                 
+%                 if ~isreal(phi(1,2))
+%                     disp(num2str((fzero(Vp,real(phi(1,2)))-real(phi(1,2)))/Mh))
+%                     if abs((fzero(Vp,real(phi(1,2)))-real(phi(1,2)))/Mh) > 1
+%                         disp('')
+%                     end
+%                 end
                 % Set phi(:,1) = phipeak
                 phi(:,1) = real(phi(:,2));
                 for it = 1:size(phi,1)

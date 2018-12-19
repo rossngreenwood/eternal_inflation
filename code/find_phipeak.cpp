@@ -140,6 +140,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     *Vppeak = 0;
 
+    dphi = 1e-7;
+
     phipeak = 0.5*(phimin + phimax);
     Vppeak = gaussian_random_field_eval_c(a_in_m,phipeak,1);
     while (abs((phimax-phimin)/dphi) >= 1 || sgn*(*Vppeak) < 0) {

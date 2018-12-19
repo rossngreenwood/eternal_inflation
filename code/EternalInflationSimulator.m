@@ -132,7 +132,7 @@ methods (Access = public)
                         
                         % Look uphill for the (dim-less) potential peak
                         xpeak = find_phipeak(phiinit/Mh,ak,1,0,1);
-                        xpeak = find_phipeak(xpeak,ak,1,0,1);
+%                         xpeak = find_phipeak(xpeak,ak,1,0,1);
                         
                         % Move phiinit to peak; tag with fall direction
                         phiinit = xpeak*Mh + 1i*sign(phiinit-xpeak*Mh);
@@ -653,6 +653,8 @@ methods (Access = protected)
         
         %% Find field values at breakdown precisely using binary search
         
+        dphi = 1e-7;
+        
         fun = @(x) (hbar^0.5*kappa*V(x)).^1.5 - 2*pi*sqrt(3)*(0.607)*abs(Vp(x));
         for i_break = 1:length(phibreak)
             
@@ -718,17 +720,20 @@ methods (Access = protected)
             off2on(end+1)   = 0;
         end
         
-        %% Check that at least one e-fold elapses with SEI valid
+        %% Compute NStochastic
         
-        dlna_dphi = @(phi) -V(phi)./Vp(phi); % Integrate this to find N_e
-        
-        for i = find(off2on,1)
-            N = integral(@(x) dlna_dphi(x),phibreak(i),phibreak(i+1));
-            if abs(N) < 1
+        NStochastic = 0;
+        for ii = 1:length(phibreak)/2
+            DeltaPhi = abs(phibreak(2*ii)-phibreak(2*ii-1));
+            deltaPhi = sqrt(kappa*V((phibreak(2*ii)+phibreak(2*ii-1))/2)/3)/2/pi;
+            disp(num2str(DeltaPhi/deltaPhi))
+            if (DeltaPhi/deltaPhi) < 1
                 % SEI epoch is too short; don't count it
-                phibreak(i:i+1) = [];
-                off2on(i:i+1)   = [];
+                phibreak((2*ii):(2*ii+1)) = [];
+                off2on((2*ii):(2*ii+1))   = [];
+                continue
             end
+            NStochastic = NStochastic + (DeltaPhi/deltaPhi)^2;
         end
         
         if isempty(phibreak)
@@ -739,6 +744,8 @@ methods (Access = protected)
         
         %% Compute # of e-folds after past SEI breakdown and before phiexit
         
+        dlna_dphi = @(phi) -V(phi)./Vp(phi); % Integrate this to find N_e
+        
         if isnan(phiexit)
         elseif (hbar^0.5*kappa*V(phiexit)).^1.5 - 2*pi*sqrt(3)*(0.607)*abs(Vp(phiexit)) > 0
             NSinceStoch = 0; % Eternal at phiexit
@@ -748,15 +755,6 @@ methods (Access = protected)
             [~,imin] = min(abs(phibreak_last-phiexit));
             % Integrate e-foldings
             NSinceStoch = integral(@(x) dlna_dphi(x),phibreak_last(imin),phiexit);
-        end
-        
-        %% Compute NStochastic
-        
-        NStochastic = 0;
-        for ii = 1:length(phibreak)/2
-            DeltaPhi = abs(phibreak(2*ii)-phibreak(2*ii-1));
-            deltaPhi = sqrt(kappa*V((phibreak(2*ii)+phibreak(2*ii-1))/2)/3)/2/pi;
-            NStochastic = NStochastic + (DeltaPhi/deltaPhi)^2;
         end
         
     end

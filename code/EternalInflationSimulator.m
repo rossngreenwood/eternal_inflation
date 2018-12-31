@@ -723,17 +723,19 @@ methods (Access = protected)
         %% Compute NStochastic
         
         NStochastic = 0;
-        for ii = 1:length(phibreak)/2
-            DeltaPhi = abs(phibreak(2*ii)-phibreak(2*ii-1));
-            deltaPhi = sqrt(kappa*V((phibreak(2*ii)+phibreak(2*ii-1))/2)/3)/2/pi;
-            disp(num2str(DeltaPhi/deltaPhi))
+	ii = 1;
+        while ii < length(phibreak)
+            DeltaPhi = abs(phibreak(ii+1)-phibreak(ii));
+            deltaPhi = sqrt(kappa*V((phibreak(ii+1)+phibreak(ii))/2)/3)/2/pi;
+            %disp(num2str(DeltaPhi/deltaPhi))
             if (DeltaPhi/deltaPhi) < 1
                 % SEI epoch is too short; don't count it
-                phibreak((2*ii):(2*ii+1)) = [];
-                off2on((2*ii):(2*ii+1))   = [];
+                phibreak(ii:ii+1) = [];
+                off2on(ii:ii+1)   = [];
                 continue
             end
             NStochastic = NStochastic + (DeltaPhi/deltaPhi)^2;
+            ii = ii+2;
         end
         
         if isempty(phibreak)

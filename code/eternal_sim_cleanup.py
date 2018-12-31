@@ -60,21 +60,41 @@ def main():
                         ind = [i for i,x in enumerate(cutParams) if x == 'record_flag'][0]
                         if not float(data_list[0]) in cutBounds[ind]:
                             continue
+                    if 'status' in cutParams:
+                        ind = [i for i,x in enumerate(cutParams) if x == 'status'][0]
+                        if not float(data_list[1]) in cutBounds[ind]:
+                            continue
+                    if data_list[0] in ['2','3']: 
+                        if 'log_tunnel_rate' in cutParams:
+                            log_tunnel_rate = float(data_list[5])
+                            ind = [i for i,x in enumerate(cutParams) if x == 'log_tunnel_rate'][0]
+                            if isnan(log_tunnel_rate):
+                                continue
+                        if 'flag_hm' in cutParams:
+                            flag_hm = float(data_list[6])
+                            ind = [i for i,x in enumerate(cutParams) if x == 'flag_hm'][0]
+                            if not flag_hm in cutBounds[ind]:
+                                continue
+                        if 'flag_fv' in cutParams:
+                            flag_fv = float(data_list[4])
+                            ind = [i for i,x in enumerate(cutParams) if x == 'flag_fv'][0]
+                            if not flag_fv in cutBounds[ind]:
+                                continue
                     if data_list[0] == '3':
                         if 'Q' in cutParams:
                             Q = float(data_list[11])
                             ind = [i for i,x in enumerate(cutParams) if x == 'Q'][0]
                             bounds = cutBounds[ind]
-                            if not type(bounds[0]) is int:
-                                Amin = 3.089-bounds[0]*0.036
-                                Amax = 3.089+bounds[1]*0.036
-                                if Q < np.sqrt(np.exp(Amin)/(1e10)):
-                                    continue
-                                if Q > np.sqrt(np.exp(Amax)/(1e10)):
-                                    continue
-                            else:
-                                if Q < bounds[0] or Q > bounds[1]:
-                                    continue
+                            #if not type(bounds[0]) is int:
+                            #    Amin = 3.089-bounds[0]*0.036
+                            #    Amax = 3.089+bounds[1]*0.036
+                            #    if Q < np.sqrt(np.exp(Amin)/(1e10)):
+                            #        continue
+                            #    if Q > np.sqrt(np.exp(Amax)/(1e10)):
+                            #        continue
+                            #else:
+                            if Q < bounds[0] or Q > bounds[1]:
+                                continue
                         if 'n_s' in cutParams:
                             n_s = float(data_list[13])
                             ind = [i for i,x in enumerate(cutParams) if x == 'n_s'][0]
@@ -87,27 +107,22 @@ def main():
                             else:
                                 if n_s < bounds[0] or n_s > bounds[1]:
                                     continue
+                        if 'r' in cutParams:
+                            r = float(data_list[12])
+                            ind = [i for i,x in enumerate(cutParams) if x == 'r'][0]
+                            bounds = cutBounds[ind]
+                            if r < bounds[0] or r > bounds[1]:
+                                continue
                         if 'Lambda' in cutParams:
                             Lambda = float(data_list[18])
                             ind = [i for i,x in enumerate(cutParams) if x == 'Lambda'][0]
                             bounds = cutBounds[ind]
                             if Lambda < bounds[0] or Lambda > bounds[1]:
                                 continue
-                        if 'log_tunnel_rate' in cutParams:
-                            log_tunnel_rate = float(data_list[5])
-                            ind = [i for i,x in enumerate(cutParams) if x == 'log_tunnel_rate'][0]
-                            if isnan(log_tunnel_rate):
+                        if 'flag_top' in cutParams:
+                            ind = [i for i,x in enumerate(cutParams) if x == 'flag_top'][0]
+                            if not float(data_list[10]) in cutBounds[ind]:
                                 continue
-                        if 'flag_hm' in cutParams:
-                            flag_hm = float(data_list[6])
-                            ind = [i for i,x in enumerate(cutParams) if x == 'flag_hm'][0]
-                            if not flag_hm in cutBounds[ind]:
-                                continue
-                    if 'flag_fv' in cutParams:
-                        flag_fv = float(data_list[4])
-                        ind = [i for i,x in enumerate(cutParams) if x == 'flag_fv'][0]
-                        if not flag_fv in cutBounds[ind]:
-                            continue
                     lncount += 1
                     print(line, file=outfile, end='')
 

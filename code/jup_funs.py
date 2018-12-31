@@ -109,7 +109,7 @@ def getBinnedFractions(run_ids,binParam,bins):
 
     return fractions
 
-def getBinnedFractions2D(run_ids,binParam,bins):
+def getBinnedFractions2D(run_ids,binParam,bins,merit=True,massBounds=((-np.inf,np.inf),(-np.inf,np.inf))):
 
     if osname == 'nt':
         data_dir = 'C:/Users/Ross/Documents/data/'
@@ -125,15 +125,24 @@ def getBinnedFractions2D(run_ids,binParam,bins):
                 'Nafter','seed','n_recycle'];
     frac_names = ['mv','mh','len','n_iter','success','Q','r','ns','alpha', \
                 'rho_Lambda','lgOk', 'stoch1','stoch2','stochAtExit','fv', \
-                'fv_hm','top','wildcard','NStoch']
+                'fv_hm','top','wildcard','NStoch','stochNearMax']
 
     n_run = len(run_ids)
-
+	
+    if merit:
+        sumfun = np.sum
+    else:
+        sumfun = np.mean
+    
     print('Loading data...         |')
     count = 0
 
     fractions = pd.DataFrame(np.zeros([np.prod([len(b)+1 for b in bins]),len(frac_names)]), columns=frac_names)
-
+    
+    maxN = np.zeros([fractions.shape[0],1])
+    NStoch = np.zeros([fractions.shape[0],1])
+    valid_runs = np.zeros([fractions.shape[0],1])
+    
     for i in range(0,n_run):
 
         if osname == 'nt':
@@ -148,13 +157,24 @@ def getBinnedFractions2D(run_ids,binParam,bins):
 
         if meta.shape[0] == 0:
             continue
-
+        
+        print('%.2f' % meta['mh'][0])
+        if meta['mv'][0] < massBounds[0][0] or meta['mv'][0] > massBounds[0][1]:
+            print(meta['mv'][0])
+            continue
+        if meta['mh'][0] < massBounds[1][0] or meta['mh'][0] > massBounds[1][1]:
+            print(meta['mh'][0])
+            continue
+        
         if i == 0 and meta.shape[0] > 0:
             print('Measure: %s' % meta['measure'][0])
 
         if np.floor(i/(n_run/25)) >= count:
             count = count + 1
-            stdout.write('#')
+            if osname == 'nt':
+                print('#',end='')
+            else:
+                print('%d' % ((count-1)*4))
 
         data = pd.read_csv(fname, skiprows=2,header=None,names=data_names)
 
@@ -168,57 +188,75 @@ def getBinnedFractions2D(run_ids,binParam,bins):
                 ibin[iparam][np.isnan(data[binParam[iparam]])] = -1
             else:
                 ibin[iparam] = np.digitize(meta[binParam[iparam]][0],bins[iparam])*np.ones((len(data),1)[0])
-
+        
         for ind0 in range(0,len(bins[0])+1):
             for ind1 in range(0,len(bins[1])+1):
 
                 ilog = np.logical_and(ibin[0] == ind0, ibin[1] == ind1)
 
                 ind = ind0*(len(bins[1])+1)+ind1
-
+                
                 if not any(ilog):
                     continue
+                elif not merit:
+                    if data[ilog].shape[0] < 10:
+                        continue
+                    else:
+                        valid_runs[ind] += 1
 
                 fractions['len'][ind]         += data[ilog].shape[0]
 
                 # Fractions for observables
-                fractions['Q'][ind]           += sum(np.logical_and(data[ilog]['Q'] > np.sqrt(np.exp(3.089-0.036)/(1e10)), \
+                fractions['Q'][ind]           += sumfun(np.logical_and(data[ilog]['Q'] > np.sqrt(np.exp(3.089-0.036)/(1e10)), \
                                                   data[ilog]['Q'] < np.sqrt(np.exp(3.089+0.036)/(1e10))))
-                fractions['r'][ind]           += sum(data[ilog]['r'] < 0.114)
-                fractions['ns'][ind]          += sum(np.logical_and(data[ilog]['n_s'] > 0.9655-0.0062, \
+                fractions['r'][ind]           += sumfun(data[ilog]['r'] < 0.114)
+                fractions['ns'][ind]          += sumfun(np.logical_and(data[ilog]['n_s'] > 0.9655-0.0062, \
                                                   data[ilog]['n_s'] < 0.9655+0.0062))
-                fractions['alpha'][ind]       += sum(np.logical_and(data[ilog]['alpha'] > -0.0057-0.0071, \
+                fractions['alpha'][ind]       += sumfun(np.logical_and(data[ilog]['alpha'] > -0.0057-0.0071, \
                                                                     data[ilog]['alpha'] <  0.0084+0.0082))
-                fractions['rho_Lambda'][ind]  += sum(data[ilog]['rho_Lambda'] == 0)
-                fractions['lgOk'][ind]        += sum(data[ilog]['lgOk'] < -2)
+                fractions['rho_Lambda'][ind]  += sumfun(data[ilog]['rho_Lambda'] == 0)
+                fractions['lgOk'][ind]        += sumfun(data[ilog]['lgOk'] < -2)
 
                 # Fractions for eternal inflation
-                fractions['stoch1'][ind]      += sum(data[ilog]['numStochEpochs'] == 1)
-                fractions['stoch2'][ind]      += sum(data[ilog]['numStochEpochs'] == 2)
-                fractions['stochAtExit'][ind] += sum(data[ilog]['NSinceStoch'] == 0)
-                fractions['fv'][ind]          += sum(data[ilog]['flag_fv_eternal'] > 0)
-                fractions['top'][ind]         += sum(data[ilog]['numTopolEpochs'] > 0)
-                fractions['fv_hm'][ind]       += sum(data[ilog]['flag_hawking_moss'] > 0)
-                ilog = np.logical_and(ilog,not np.isnan(data['NSinceStoch']))
-                fractions['NStoch'][ind]      += sum(data[ilog]['N']-data[ilog]['NSinceStoch']-55)
-
+                fractions['stoch1'][ind]      += sumfun(data[ilog]['numStochEpochs'] == 1)
+                fractions['stoch2'][ind]      += sumfun(data[ilog]['numStochEpochs'] == 2)
+                fractions['stochAtExit'][ind] += sumfun(data[ilog]['NSinceStoch'] == 0)
+                fractions['fv'][ind]          += sumfun(data[ilog]['flag_fv_eternal'] > 0)
+                fractions['top'][ind]         += sumfun(data[ilog]['numTopolEpochs'] > 0)
+                fractions['fv_hm'][ind]       += sumfun(data[ilog]['flag_hawking_moss'] > 0)
+                #ilog = np.logical_and(ilog,data['N']>0)
+                ilog = np.logical_and(ilog,np.logical_not(np.isnan(data['NSinceStoch'])))
+                newMax = np.max(data[ilog]['N'])
+                if newMax > maxN[ind]:
+                    maxN[ind] = newMax
+                fractions['NStoch'][ind]      += sumfun(data[ilog]['N'])
+                NStoch[ind]      += np.sum(ilog)
+                fractions['stochNearMax'][ind] += np.sum(data[ilog]['NSinceStoch'] > 1)
+    
     # Divide by total counts to obtain fractions
     for j in fractions.index:
-        if fractions['len'][j] > 0:
-            fractions['stoch1'][j]      /= fractions['len'][j]
-            fractions['stoch2'][j]      /= fractions['len'][j]
-            fractions['stochAtExit'][j] /= fractions['len'][j]
-            fractions['top'][j]         /= fractions['len'][j]
-            fractions['fv'][j]          /= fractions['len'][j]
-            fractions['fv_hm'][j]       /= fractions['len'][j]
-            fractions['wildcard'][j]    /= fractions['len'][j]
-            fractions['Q'][j]           /= fractions['len'][j]
-            fractions['r'][j]           /= fractions['len'][j]
-            fractions['ns'][j]          /= fractions['len'][j]
-            fractions['alpha'][j]       /= fractions['len'][j]
-            fractions['rho_Lambda'][j]  /= fractions['len'][j]
-            fractions['lgOk'][j]        /= fractions['len'][j]
-            fractions['NStoch'][j]      /= fractions['len'][j]
+        if merit:
+            nsamp = fractions['len'][j]
+        else:
+            nsamp = valid_runs[j]
+        if nsamp > 0:
+            fractions['stoch1'][j]      /= nsamp
+            fractions['stoch2'][j]      /= nsamp
+            fractions['stochAtExit'][j] /= nsamp
+            fractions['top'][j]         /= nsamp
+            fractions['fv'][j]          /= nsamp
+            fractions['fv_hm'][j]       /= nsamp
+            fractions['wildcard'][j]    /= nsamp
+            fractions['Q'][j]           /= nsamp
+            fractions['r'][j]           /= nsamp
+            fractions['ns'][j]          /= nsamp
+            fractions['alpha'][j]       /= nsamp
+            fractions['rho_Lambda'][j]  /= nsamp
+            fractions['lgOk'][j]        /= nsamp
+            fractions['NStoch'][j]      -= maxN[j]
+            #fractions['NStoch'][j]      /= np.max([1,nsamp])
+            fractions['NStoch'][j]      /= np.max([1,(NStoch[j]-1)])
+            fractions['stochNearMax'][j]/= NStoch[j]
 
     print(' Done')
 
@@ -280,7 +318,7 @@ def getBin2D(run_ids,binParam,bins):
                 ibin[iparam][np.isnan(data[binParam[iparam]])] = -1
             else:
                 ibin[iparam] = np.digitize(meta[binParam[iparam]][0],bins[iparam])*np.ones((len(data),1)[0])
-
+        print(np.sum(ibin[0]==1))
         for ind0 in range(1,2):
             for ind1 in range(1,2):
 

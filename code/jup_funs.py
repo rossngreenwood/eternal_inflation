@@ -109,7 +109,7 @@ def getBinnedFractions(run_ids,binParam,bins):
 
     return fractions
 
-def getBinnedFractions2D(run_ids,binParam,bins,merit=True,massBounds=((-np.inf,np.inf),(-np.inf,np.inf))):
+def getBinnedFractions2D(run_ids,binParam,bins,merit=True,massBounds=((-np.inf,np.inf),(-np.inf,np.inf)),cutParams=None,cutBounds=None):
 
     if osname == 'nt':
         data_dir = 'C:/Users/Ross/Documents/data/'
@@ -128,21 +128,21 @@ def getBinnedFractions2D(run_ids,binParam,bins,merit=True,massBounds=((-np.inf,n
                 'fv_hm','top','wildcard','NStoch','stochNearMax']
 
     n_run = len(run_ids)
-	
+
     if merit:
         sumfun = np.sum
     else:
         sumfun = np.mean
-    
+
     print('Loading data...         |')
     count = 0
 
     fractions = pd.DataFrame(np.zeros([np.prod([len(b)+1 for b in bins]),len(frac_names)]), columns=frac_names)
-    
+
     maxN = np.zeros([fractions.shape[0],1])
     NStoch = np.zeros([fractions.shape[0],1])
     valid_runs = np.zeros([fractions.shape[0],1])
-    
+
     for i in range(0,n_run):
 
         if osname == 'nt':
@@ -157,7 +157,7 @@ def getBinnedFractions2D(run_ids,binParam,bins,merit=True,massBounds=((-np.inf,n
 
         if meta.shape[0] == 0:
             continue
-        
+
         print('%.2f' % meta['mh'][0])
         if meta['mv'][0] < massBounds[0][0] or meta['mv'][0] > massBounds[0][1]:
             print(meta['mv'][0])
@@ -165,7 +165,7 @@ def getBinnedFractions2D(run_ids,binParam,bins,merit=True,massBounds=((-np.inf,n
         if meta['mh'][0] < massBounds[1][0] or meta['mh'][0] > massBounds[1][1]:
             print(meta['mh'][0])
             continue
-        
+
         if i == 0 and meta.shape[0] > 0:
             print('Measure: %s' % meta['measure'][0])
 
@@ -188,14 +188,21 @@ def getBinnedFractions2D(run_ids,binParam,bins,merit=True,massBounds=((-np.inf,n
                 ibin[iparam][np.isnan(data[binParam[iparam]])] = -1
             else:
                 ibin[iparam] = np.digitize(meta[binParam[iparam]][0],bins[iparam])*np.ones((len(data),1)[0])
-        
+
+        icut = np.greater(data['mv'],-1)
+        if cutParams is not None:
+            for ic in range(len(cutParams)):
+                p = data[cutParams[ic]]
+                icut = np.logical_and.reduce((icut,p >= cutBounds[ic][0], p <= cutBounds[ic][1]))
+
         for ind0 in range(0,len(bins[0])+1):
+            ]
             for ind1 in range(0,len(bins[1])+1):
 
-                ilog = np.logical_and(ibin[0] == ind0, ibin[1] == ind1)
+                ilog = np.logical_and.reduce((ibin[0] == ind0, ibin[1] == ind1, icut))
 
                 ind = ind0*(len(bins[1])+1)+ind1
-                
+
                 if not any(ilog):
                     continue
                 elif not merit:
@@ -232,7 +239,7 @@ def getBinnedFractions2D(run_ids,binParam,bins,merit=True,massBounds=((-np.inf,n
                 fractions['NStoch'][ind]      += sumfun(data[ilog]['N'])
                 NStoch[ind]      += np.sum(ilog)
                 fractions['stochNearMax'][ind] += np.sum(data[ilog]['NSinceStoch'] > 1)
-    
+
     # Divide by total counts to obtain fractions
     for j in fractions.index:
         if merit:

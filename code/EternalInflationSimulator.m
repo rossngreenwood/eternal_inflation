@@ -66,7 +66,7 @@ methods (Access = public)
                 
                 switch p.measure
                     
-                    case {'A','D'}
+                    case {'A','D','E'}
                         
                         % Check if potential energy is already too negative
                         if V0(ii) < -V_offset_max
@@ -128,7 +128,7 @@ methods (Access = public)
                 
                 switch p.measure
                     
-                    case {'A','D'}
+                    case {'A','D','E'}
                         
                         % Look uphill for the (dim-less) potential peak
                         xpeak = find_phipeak(phiinit/Mh,ak,1,0,1);
@@ -149,6 +149,9 @@ methods (Access = public)
                                     disp(me.message);
                                     break
                                 end
+                            elseif strcmpi(p.measure,'E')
+                                 [phistart,~] = obj.find_phistart(xpeak*Mh,@(x) Mv^4*f{1}(x/Mh)-V_offset,@(x) Mv^4*f{2}(x/Mh)/Mh,@(x) Mv^4*f{3}(x/Mh)/Mh^2,Mh,obj.m_Pl);
+                                 phiinit = phistart;
                             else
                                 break
                             end
@@ -186,6 +189,7 @@ methods (Access = public)
                 Ntotal = nan(1+p.n_tunnel_max,1);
                 
                 last_valid = nan;
+                weight_E = 1;
                 
                 for i_tunnel = 0:p.n_tunnel_max, it = 1 + i_tunnel;
                     
@@ -242,7 +246,7 @@ methods (Access = public)
                     else
                         [phi(it,:),status(it,1),Ntotal(it,1),V,Vp,Vpp] = ...
                             obj.simulate_slowroll(f,phistart,V_offset,...
-                            ~isreal(phiinit),Vstart,Vpstart);
+                            ~isreal(phiinit) && phistart == real(phiinit),Vstart,Vpstart);
                     end
                     
                     phi(it,2) = phiinit;
@@ -258,6 +262,27 @@ methods (Access = public)
                     else
                         phi(it,6) = find_phistop(real(phiinit)/Mh,...
                             ak,1,V_offset/Mv^4,1,0)*Mh;
+                    end
+                    
+                    % For Measure E only:
+                    if strcmpi(p.measure,'E') && i_tunnel == 0 && ~isnan(phi(1,4))
+                        phiexit = phi(1,4);
+                        % Report ratio of size of interval where N>55
+                        % is possible to size of half-basin
+                        weight_E = abs((real(phiinit)-phiexit)/(real(phiinit)-phi(1,6)));
+                        % Resample phistart between phiexit and old
+                        % phistart
+                        if phistart ~= real(phiinit) % Inflation starts below maximum
+                            tmp = phiexit + (real(phiinit)-phiexit)*rand();
+                            if sign(phistart-phiexit) == sign(phistart-tmp)
+                                % Only change phistart if the new value
+                                % is lower on the slope than the old
+                                phistart = tmp;
+                            end
+                        else % Inflation starts at maximum
+                            phistart = phiexit + (phistart-phiexit)*rand();
+                        end
+                        phi(1,3) = phistart;
                     end
                     
                     if i_tunnel > 0 && (isnan(phi(it,6)) || V(phi(it,6)) < 0)
@@ -367,6 +392,7 @@ methods (Access = public)
                 data_out(15) = observables.dlgrho;
                 data_out(16) = observables.lgOk;
                 data_out(17) = observables.rho_Lambda/obj.m_Pl^4;
+                data_out(20) = weight_E;
                 
             end % for goto
             
@@ -723,13 +749,16 @@ methods (Access = protected)
         %% Compute NStochastic
         
         NStochastic = 0;
-	ii = 1;
-        while ii < length(phibreak)
+        ii = 1;
+        while true
+            if ii > length(phibreak)    
+                break
+            end
             DeltaPhi = abs(phibreak(ii+1)-phibreak(ii));
             deltaPhi = sqrt(kappa*V((phibreak(ii+1)+phibreak(ii))/2)/3)/2/pi;
-            %disp(num2str(DeltaPhi/deltaPhi))
-            if (DeltaPhi/deltaPhi) < 1
-                % SEI epoch is too short; don't count it
+            if phibreak(ii) == phistart && (phistart == real(phi(2))) && (DeltaPhi/deltaPhi) < 1
+                % fluctuations are larger than fluctuation-dominated
+                % interval near the maximum; don't count it
                 phibreak(ii:ii+1) = [];
                 off2on(ii:ii+1)   = [];
                 continue
@@ -1541,8 +1570,8 @@ methods (Static)
                 fclose(fid);
             case 3
                 fid = fopen(outfile,'at');
-                fprintf(fid,'%d,%d,%.3G,%.4G,%d,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
-                    [3 data_out([2:6 18 19 7:17])]);
+                fprintf(fid,'%d,%d,%.3G,%.4G,%d,%.4G,%d,%.4G,%d,%.2G,%d,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G,%.4G\r\n',...
+                    [3 data_out([2:6 18 19 7:17 20])]);
                 fclose(fid);
         end
         
@@ -1706,7 +1735,7 @@ methods
                     end
                     
                 case 'measure'
-                    if ismember(upper(val.measure),{'A','B','C','D'})
+                    if ismember(upper(val.measure),{'A','B','C','D','E'})
                         obj.parameters.(fn{:}) = val.(fn{:});
                     else
                         error('parameters.measure must be ''A'' or ''B''');

@@ -86,10 +86,6 @@ methods (Access = public)
                         % Saturate the bound to give most leeway
                         if V0(ii) < -V_offset_max
                             data_out(2) = 1; break
-                        %elseif (Vp0(ii)/(V0(ii)+V_offset_max)).^2/(16*pi/obj.m_Pl^2) > 1
-                        %    data_out(2) = 2;
-                        %elseif abs(Vpp0(ii)/(V0(ii)+V_offset_max))/(8*pi/obj.m_Pl^2) > 1
-                        %    data_out(2) = 3;
                         else
                             data_out(2) = 0;
                         end
@@ -132,7 +128,6 @@ methods (Access = public)
                         
                         % Look uphill for the (dim-less) potential peak
                         xpeak = find_phipeak(phiinit/Mh,ak,1,0,1);
-%                         xpeak = find_phipeak(xpeak,ak,1,0,1);
                         
                         % Move phiinit to peak; tag with fall direction
                         phiinit = xpeak*Mh + 1i*sign(phiinit-xpeak*Mh);
@@ -285,6 +280,14 @@ methods (Access = public)
                         phi(1,3) = phistart;
                     end
                     
+                    if ~isnan(phi(4))
+                        if sign(phi(4)-phi(3)) == sign(phi(5)-phi(4))
+                            disp(1)
+                        else
+                            disp(0)
+                        end
+                    end
+                    
                     if i_tunnel > 0 && (isnan(phi(it,6)) || V(phi(it,6)) < 0)
                         break % Vacuum energy is negative
                     elseif ~isnan(phi(it,5))
@@ -341,12 +344,6 @@ methods (Access = public)
                     i_success = i_success + 1;
                 end
                 
-%                 if ~isreal(phi(1,2))
-%                     disp(num2str((fzero(Vp,real(phi(1,2)))-real(phi(1,2)))/Mh))
-%                     if abs((fzero(Vp,real(phi(1,2)))-real(phi(1,2)))/Mh) > 1
-%                         disp('')
-%                     end
-%                 end
                 % Set phi(:,1) = phipeak
                 phi(:,1) = real(phi(:,2));
                 for it = 1:size(phi,1)
@@ -468,7 +465,7 @@ methods (Access = protected)
             
             % Integrate back from (phiend,Nafter) to (phiexit,0)
             dphi_dlna = @(N,phi) (-Vp(phi)./V(phi)/kappa).';
-            [~,phiexit] = ode23(dphi_dlna,[obj.parameters.Nafter 1 0],phiend);
+            [~,phiexit] = ode45(dphi_dlna,[obj.parameters.Nafter 1 0],phiend);
             phi(4) = phiexit(3);
             
         end

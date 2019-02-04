@@ -244,6 +244,10 @@ methods (Access = public)
                             ~isreal(phiinit) && phistart == real(phiinit),Vstart,Vpstart);
                     end
                     
+                    if ~isnan(phi(4)) && sign(phi(4)-phi(3)) ~= sign(phi(5)-phi(4))
+                        break
+                    end
+                    
                     phi(it,2) = phiinit;
                     
                     % Set phi(:,6) = phistop, location of the local minimum
@@ -283,6 +287,8 @@ methods (Access = public)
                     if ~isnan(phi(4))
                         if sign(phi(4)-phi(3)) == sign(phi(5)-phi(4))
                             disp(1)
+                        elseif sign(phi(4)-phi(3)) == 0
+                            disp(1)
                         else
                             disp(0)
                         end
@@ -303,6 +309,10 @@ methods (Access = public)
                     
                 end
                 
+                if ~isnan(phi(4)) && sign(phi(4)-phi(3)) ~= sign(phi(5)-phi(4))
+                    break
+                end
+                    
                 %% Screen models based on amount of inflation
                 
                 % Only fv eternal if inflation ends in another basin
@@ -465,7 +475,7 @@ methods (Access = protected)
             
             % Integrate back from (phiend,Nafter) to (phiexit,0)
             dphi_dlna = @(N,phi) (-Vp(phi)./V(phi)/kappa).';
-            [~,phiexit] = ode45(dphi_dlna,[obj.parameters.Nafter 1 0],phiend);
+            [~,phiexit] = ode23(dphi_dlna,[obj.parameters.Nafter 1 0],phiend);
             phi(4) = phiexit(3);
             
         end
@@ -610,6 +620,7 @@ methods (Access = protected)
         NSinceStoch    = nan; % Number of e-foldings between SEI breakdown and exit scale
         NStochastic    = nan; % Expected number of e-folds 
         
+        phiinit  = phi(2);
         phistart = phi(3);
         phiexit  = phi(4);
         phiend   = phi(5);
@@ -753,7 +764,7 @@ methods (Access = protected)
             end
             DeltaPhi = abs(phibreak(ii+1)-phibreak(ii));
             deltaPhi = sqrt(kappa*V((phibreak(ii+1)+phibreak(ii))/2)/3)/2/pi;
-            if phibreak(ii) == phistart && (phistart == real(phi(2))) && (DeltaPhi/deltaPhi) < 1
+            if phibreak(ii) == phistart && (phistart == real(phiinit)) && (DeltaPhi/deltaPhi) < 1
                 % fluctuations are larger than fluctuation-dominated
                 % interval near the maximum; don't count it
                 phibreak(ii:ii+1) = [];

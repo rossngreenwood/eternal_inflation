@@ -284,16 +284,6 @@ methods (Access = public)
                         phi(1,3) = phistart;
                     end
                     
-                    if ~isnan(phi(4))
-                        if sign(phi(4)-phi(3)) == sign(phi(5)-phi(4))
-                            disp(1)
-                        elseif sign(phi(4)-phi(3)) == 0
-                            disp(1)
-                        else
-                            disp(0)
-                        end
-                    end
-                    
                     if i_tunnel > 0 && (isnan(phi(it,6)) || V(phi(it,6)) < 0)
                         break % Vacuum energy is negative
                     elseif ~isnan(phi(it,5))
@@ -309,7 +299,7 @@ methods (Access = public)
                     
                 end
                 
-                if ~isnan(phi(4)) && sign(phi(4)-phi(3)) ~= sign(phi(5)-phi(4))
+                if ~isnan(phi(1,4)) && sign(phi(1,4)-phi(1,3)) ~= sign(phi(1,5)-phi(1,4))
                     break
                 end
                     
@@ -367,7 +357,8 @@ methods (Access = public)
                 for b = 0:size(phi,1)-1 % Loop over basins
                     
                     % Stochastic eternal inflation
-                    [numStochEpochs,NSinceStoch,NStochastic] = obj.check_stochastic_eternal(V,Vp,Vpp,phi(1+b,:));
+                    [numStochEpochs,NSinceStoch,NStochastic,contig_with_max] = ...
+                        obj.check_stochastic_eternal(V,Vp,Vpp,phi(1+b,:));
                     data_out(7) = max(0,data_out(7)) + max(0,numStochEpochs);
                     data_out(8) = NSinceStoch; % Only keeps value from last basin
                     if ~isnan(NStochastic)
@@ -376,6 +367,9 @@ methods (Access = public)
                     
                     % Topological eternal inflation
                     flag_topological_eternal = obj.check_topological_eternal(V,Vp,Vpp,phi(1+b,2),phi(1+b,1));
+                    if stcmpi(p.measure,'B') && ~isnan(contig_with_max) && contig_with_max
+                        flag_topological_eternal = true;
+                    end
                     data_out(9) = max(0,data_out(9)) + max(0,flag_topological_eternal);
                     
                 end
@@ -609,7 +603,7 @@ methods (Access = protected)
         
     end
     
-    function [numStochEpochs,NSinceStoch,NStochastic] = check_stochastic_eternal(obj,V,Vp,Vpp,phi)
+    function [numStochEpochs,NSinceStoch,NStochastic,contig_with_max] = check_stochastic_eternal(obj,V,Vp,Vpp,phi)
         
         p = obj.parameters;
         
@@ -619,6 +613,7 @@ methods (Access = protected)
         numStochEpochs = nan; % Number of intervals of eternal inflation
         NSinceStoch    = nan; % Number of e-foldings between SEI breakdown and exit scale
         NStochastic    = nan; % Expected number of e-folds 
+        contig_with_max = nan;
         
         phiinit  = phi(2);
         phistart = phi(3);
@@ -746,6 +741,28 @@ methods (Access = protected)
 %                     return
 %                 end
 %             end
+            % Determine if stochastic interval is contiguous with maximum
+            sgn    = sign(Vp(phistart));
+            phipeak = phi(1);
+            phimin = phiscale^2 * abs(Vpstart./Vstart);
+            dphi   = 0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));
+            ind = 1; ii = 1;
+            phisearch = phistart*ones(1,batch);
+            contig_with_max = true;
+            while sgn*(phisearch(ii)-phipeak) < 0
+                if mod(ind,batch) == 1
+                    phi_last = phisearch(end);
+                    phisearch = phi_last + cumsum(dphi*step.^(ind-1:ind+batch-2));
+                    Vend   = V(phisearch);
+                    Vpend  = Vp(phisearch);
+                end
+                ii = mod(ind-1,batch)+1;
+                if (hbar^0.5*(kappa*Vend(ii))^1.5 - 2*pi*sqrt(3)*(0.607)*abs(Vpend(ii))) < 0
+                    contig_with_max = false;
+                    break
+                end
+                ind = ind + 1;
+            end
         end
         
         if off2on(end) == 1 % SEI is satisfied at phiend

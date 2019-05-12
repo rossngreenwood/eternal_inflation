@@ -2,7 +2,7 @@
 #
 #SBATCH --job-name=etrnlinf
 #SBATCH --ntasks=1
-#SBATCH --mem-per-cpu=1000
+#SBATCH --mem-per-cpu=5300
 #SBATCH --time=120:00:00
 #SBATCH --output=/hb/home/rngreenw/eternal_inflation/data/etrnlinf_%j.out
 #SBATCH --mail-type=fail

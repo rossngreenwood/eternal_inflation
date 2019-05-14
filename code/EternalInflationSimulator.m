@@ -198,6 +198,7 @@ methods (Access = public)
                             V_offset,p.n_tunnel_max+1-i_tunnel);
                         
                         if isnan(phitunnel), break, end
+                        if V(phi(i_tunnel,6)) <= 0, break, end
                         
                         %% Handle false-vacuum tunneling
                         
@@ -357,17 +358,18 @@ methods (Access = public)
                 for b = 0:size(phi,1)-1 % Loop over basins
                     
                     % Stochastic eternal inflation
-                    [numStochEpochs,NSinceStoch,NStochastic,contig_with_max] = ...
+                    [numStochEpochs,NSinceStoch,NStochastic,contig_with_max,fractal_dim] = ...
                         obj.check_stochastic_eternal(V,Vp,Vpp,phi(1+b,:));
                     data_out(7) = max(0,data_out(7)) + max(0,numStochEpochs);
                     data_out(8) = NSinceStoch; % Only keeps value from last basin
                     if ~isnan(NStochastic)
                         Ntotal(1+b) = NStochastic + NSinceStoch + p.Nafter;
                     end
+                    data_out(20) = fractal_dim;
                     
                     % Topological eternal inflation
                     flag_topological_eternal = obj.check_topological_eternal(V,Vp,Vpp,phi(1+b,2),phi(1+b,1));
-                    if stcmpi(p.measure,'B') && ~isnan(contig_with_max) && contig_with_max
+                    if strcmpi(p.measure,'B') && ~isnan(contig_with_max) && contig_with_max
                         flag_topological_eternal = true;
                     end
                     data_out(9) = max(0,data_out(9)) + max(0,flag_topological_eternal);
@@ -393,7 +395,7 @@ methods (Access = public)
                 data_out(15) = observables.dlgrho;
                 data_out(16) = observables.lgOk;
                 data_out(17) = observables.rho_Lambda/obj.m_Pl^4;
-                data_out(20) = weight_E;
+%                 data_out(20) = weight_E;
                 
             end % for goto
             
@@ -603,7 +605,7 @@ methods (Access = protected)
         
     end
     
-    function [numStochEpochs,NSinceStoch,NStochastic,contig_with_max] = check_stochastic_eternal(obj,V,Vp,Vpp,phi)
+    function [numStochEpochs,NSinceStoch,NStochastic,contig_with_max,fractal_dim] = check_stochastic_eternal(obj,V,Vp,Vpp,phi)
         
         p = obj.parameters;
         
@@ -614,6 +616,7 @@ methods (Access = protected)
         NSinceStoch    = nan; % Number of e-foldings between SEI breakdown and exit scale
         NStochastic    = nan; % Expected number of e-folds 
         contig_with_max = nan;
+        fractal_dim    = nan;
         
         phiinit  = phi(2);
         phistart = phi(3);
@@ -797,6 +800,19 @@ methods (Access = protected)
         end
         
         numStochEpochs = nnz(~off2on);
+        
+        %% Compute fractal dimension
+        
+%         if quadratic
+        if phibreak(1) == phistart && (phistart == real(phiinit))
+            H = sqrt(kappa*V((phibreak(2)+phibreak(1))/2)/3);
+            M = -Vpp(phistart);
+            fractal_dim = 3 - M^3/3/H^2;
+        end
+%         elseif quartic
+%             lambda = Vpppp(phipeak);
+%             d = 3 - C*sqrt(lambda);
+%         end
         
         %% Compute # of e-folds after past SEI breakdown and before phiexit
         

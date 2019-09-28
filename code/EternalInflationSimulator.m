@@ -502,6 +502,9 @@ methods (Access = protected)
             [any_viable,phitv,phipeak] = obj.screen_basin(...
                 lr,V,Vp,Vpp,ak,rho_offset,n_tunnel,phifv,Vfalse);
             if isnan(phipeak), continue, end
+%             if abs(V(phitv)) > (obj.parameters.mv*obj.m_Pl)^4/100
+%                 continue
+%             end
             
             mh_eff = 1/sqrt(abs(Vpp(phipeak(1))/V(phipeak(1))))/obj.m_Pl;
             
@@ -549,22 +552,27 @@ methods (Access = protected)
                         case 'FalseVacuumInstanton:IntegralDiverged'
                             continue % Integration failed; assume no tunneling
                         otherwise
-                            % Write potential coefs, phi_meatMin, phi_absMin to log
-                            % file, later for debugging
-                            disp(me.message);
-                            fid = fopen(obj.logfile,'at');
-                            fprintf(fid,'%s\r\n',me.message);
-                            fprintf(fid,'n_tunnel_remaining: %d\r\n',n_tunnel);
-                            fprintf(fid,'rho_offset: %.4G\r\n',rho_offset);
-                            fprintf(fid,'phi_metaMin, phi_absMin: %.4G,%.4G; ak:\r\n',[phifv,phitv]);
-                            for ii = 1:size(ak,1)
-                                fprintf(fid,'%.4f %.4f;\r\n',ak(ii,:));
-                            end
-                            fclose(fid);
+%                             % Write potential coefs, phi_meatMin, phi_absMin to log
+%                             % file, later for debugging
+%                             disp(me.message);
+%                             fid = fopen(obj.logfile,'at');
+%                             fprintf(fid,'%s\r\n',me.message);
+%                             fprintf(fid,'n_tunnel_remaining: %d\r\n',n_tunnel);
+%                             fprintf(fid,'rho_offset: %.4G\r\n',rho_offset);
+%                             fprintf(fid,'phi_metaMin, phi_absMin: %.4G,%.4G; ak:\r\n',[phifv,phitv]);
+%                             for ii = 1:size(ak,1)
+%                                 fprintf(fid,'%.4f %.4f;\r\n',ak(ii,:));
+%                             end
+%                             fclose(fid);
                             continue
                     end
                 end
                 
+%                 if ~isscalar(R)
+%                     x = linspace(phitv,phifv,1000); plot(x,V(x)); hold on; plot(profile(1),V(profile(1)),'o'); plot(profile(end,1),V(profile(end,1)),'x');
+%                     hold off
+%                     pause(2)
+%                 end
                 if isfinite(profile(1,1))
                     flag_hm(lr) = isscalar(R);  % Hawking-Moss instanton?
                     phitunnel(lr) = profile(1,1); % Field value at center of bubble
@@ -634,8 +642,7 @@ methods (Access = protected)
         Vpstart = Vp(phistart);
         
         sgn    = sign(Vp(phistart));
-        phimin = phiscale^2 * abs(Vpstart./Vstart);
-        dphi   = -0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));
+        dphi   = -0.001*sgn*max(0.01*phiscale,min(phiscale^2 * abs(Vpstart./Vstart),phiscale));
         
         phibreak = nan; % Field values where SEIC changes sign
         off2on   = nan; % True if SEIC goes from (+) to (-) moving downhill
@@ -733,22 +740,9 @@ methods (Access = protected)
             % Add phistart as the past boundary of the first interval
             phibreak = [phistart phibreak];
             off2on   = [1        off2on];
-%             if flag_starts_at_peak && (kappa*V(phistart))^(3/2) < 10.25 * Vpp(phistart)*phistart
-%                 % Second derivative check fails around potential peak
-%                 % Remove the bout of SEI contiguous with phistart
-%                 phibreak = phibreak(min(3,end+1):end);
-%                 off2on   = off2on(min(3,end+1):end);
-%                 % TODO: Find where the 2DC becomes valid and determine if
-%                 % it invalidates the whole epoch near the maximum
-%                 if isempty(phibreak)
-%                     return
-%                 end
-%             end
             % Determine if stochastic interval is contiguous with maximum
-            sgn    = sign(Vp(phistart));
             phipeak = phi(1);
-            phimin = phiscale^2 * abs(Vpstart./Vstart);
-            dphi   = 0.001*sgn*max(0.01*phiscale,min(phimin,phiscale));
+            dphi   = 0.001*sgn*max(0.01*phiscale,min(phiscale^2 * abs(Vpstart./Vstart),phiscale));
             ind = 1; ii = 1;
             phisearch = phistart*ones(1,batch);
             contig_with_max = true;
@@ -803,16 +797,11 @@ methods (Access = protected)
         
         %% Compute fractal dimension
         
-%         if quadratic
         if phibreak(1) == phistart && (phistart == real(phiinit))
-            H = sqrt(kappa*V((phibreak(2)+phibreak(1))/2)/3);
+            H = sqrt(kappa*V(phibreak(1))/3);
             M = -Vpp(phistart);
-            fractal_dim = 3 - M^3/3/H^2;
+            fractal_dim = -M^2/3/H^2;
         end
-%         elseif quartic
-%             lambda = Vpppp(phipeak);
-%             d = 3 - C*sqrt(lambda);
-%         end
         
         %% Compute # of e-folds after past SEI breakdown and before phiexit
         
@@ -1162,17 +1151,19 @@ methods (Access = protected)
         Vstart = V(phistart);
         
         y0 = [phistart, ysign*sqrt(2*Vstart), 1, sqrt(V(phistart)/3/obj.M_Pl^2)];
+        H = sqrt(V(phipeak)/3/obj.M_Pl^2);
+        y0 = [phipeak+ysign*(H/2/pi), 0, 1, H] % Start 1-\sigma away from peak
         
         % dY is the ODE that we use
         dY = @(r,y) obj.equation_of_motion(V,Vp,r,y,obj.m_Pl).';
         
         ie = [];
-        tmin = -abs(y0(1)/y0(2))/10;
+        tmin = abs(y0(1)/y0(2))/10;
         count = 0;
         while isempty(ie)
             
             options = odeset(...
-                'Events',   @(~,y) obj.ode_events(y,ysign,phipeak) );
+                'Events',   @(~,y) obj.ode_events(y,ysign,phistart) );
             [r1,y1,re,~,ie] = ode23s(dY,[0,tmin],y0.',options);
             
             tmin = tmin*2;
@@ -1189,8 +1180,10 @@ methods (Access = protected)
         switch ie(end)
             case 1 % Passed the peak
                 % Means kinetic energy is within attractor at phistart
-            case 2 % Didn't make it to the peak
-                phistart = nan;
+                if abs(y1(2)) > sqrt(2*Vstart)
+                    phistart = nan
+%             case 2 % Didn't make it to the peak
+%                 phistart = nan;
             otherwise
                 error('FalseVacuumInstanton:IntegralDiverged',...
                     'ODE solver failed to integrate instanton solution.');
@@ -1646,7 +1639,7 @@ methods (Static)
         kappa = 8*pi/m_Pl^2;
         
         d2phi = -dV(phi.').' - 3*da.*dphi./a;
-        d2a = -kappa/3*(dphi.^2 - V(phi.').');
+        d2a = -kappa/3*a*(dphi.^2 - V(phi.').');
         
         dy = [dphi,d2phi,da,d2a];
         
@@ -1658,7 +1651,7 @@ methods (Static)
         
         events = [...
             (phi-phi0)*ysign,  true,   0;...
-            dphi*ysign,        true,   0 ...
+%             dphi*ysign,        true,   0 ...
             ];
         
         value       = events(:,1);

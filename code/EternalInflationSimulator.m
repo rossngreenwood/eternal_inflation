@@ -363,7 +363,8 @@ methods (Access = public)
                     data_out(7) = max(0,data_out(7)) + max(0,numStochEpochs);
                     data_out(8) = NSinceStoch; % Only keeps value from last basin
                     if ~isnan(NStochastic)
-                        Ntotal(1+b) = NStochastic + NSinceStoch + p.Nafter;
+	                data_out(8) = data_out(8) + imag(NStochastic)*1i;
+                        Ntotal(1+b) = real(NStochastic) + NSinceStoch + p.Nafter;
                     end
                     data_out(20) = fractal_dim;
                     
@@ -783,6 +784,7 @@ methods (Access = protected)
                 % interval near the maximum; don't count it
                 phibreak(ii:ii+1) = [];
                 off2on(ii:ii+1)   = [];
+                NStochastic = real(NStochastic) + (DeltaPhi/deltaPhi)*1i
                 continue
             end
             NStochastic = NStochastic + (DeltaPhi/deltaPhi)^2;
@@ -1152,7 +1154,7 @@ methods (Access = protected)
         
         y0 = [phistart, ysign*sqrt(2*Vstart), 1, sqrt(V(phistart)/3/obj.M_Pl^2)];
         H = sqrt(V(phipeak)/3/obj.M_Pl^2);
-        y0 = [phipeak+ysign*(H/2/pi), 0, 1, H] % Start 1-\sigma away from peak
+        y0 = [phipeak+ysign*(H/2/pi), 0, 1, H]; % Start 1-\sigma away from peak
         
         % dY is the ODE that we use
         dY = @(r,y) obj.equation_of_motion(V,Vp,r,y,obj.m_Pl).';
@@ -1181,7 +1183,8 @@ methods (Access = protected)
             case 1 % Passed the peak
                 % Means kinetic energy is within attractor at phistart
                 if abs(y1(2)) > sqrt(2*Vstart)
-                    phistart = nan
+                    phistart = nan;
+                end
 %             case 2 % Didn't make it to the peak
 %                 phistart = nan;
             otherwise
